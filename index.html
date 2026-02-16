@@ -116,6 +116,16 @@
             <!-- Status Message -->
             <div id="statusMessage" class="mt-4 mb-8 hidden"></div>
 
+            <!-- Rejected Submissions (Data User Only) -->
+            <div id="rejectedSubmissionsSection" class="hidden mb-8 p-6 bg-red-50 border-l-4 border-red-600 rounded-lg">
+                <h2 class="text-xl font-bold text-red-900 mb-4">❌ Rejected Submissions</h2>
+                <p class="text-sm text-red-800 mb-4">These submissions were rejected by the admin. You can load them back, edit, and resubmit.</p>
+                <button id="refreshRejectedBtn" class="mb-4 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
+                    🔄 Refresh Rejected
+                </button>
+                <div id="rejectedList"></div>
+            </div>
+
             <!-- Approval Dashboard (Admin Only) -->
             <div id="approvalDashboard" class="hidden mb-8 p-6 bg-orange-50 border-l-4 border-orange-600 rounded-lg">
                 <h2 class="text-xl font-bold text-orange-900 mb-4">🔔 Pending Approvals</h2>
@@ -313,6 +323,7 @@
                 document.getElementById('clientMasterSection').classList.remove('hidden');
                 document.getElementById('projectMasterSection').classList.remove('hidden');
                 document.getElementById('approvalDashboard').classList.remove('hidden');
+                document.getElementById('rejectedSubmissionsSection').classList.add('hidden');
                 loadPendingApprovals();
             } else {
                 // Data user - submit for approval
@@ -322,7 +333,9 @@
                 document.getElementById('clientMasterSection').classList.add('hidden');
                 document.getElementById('projectMasterSection').classList.add('hidden');
                 document.getElementById('approvalDashboard').classList.add('hidden');
+                document.getElementById('rejectedSubmissionsSection').classList.remove('hidden');
                 loadAdminsList();
+                loadRejectedSubmissions();
             }
             
             // Load saved progress for current user
@@ -978,6 +991,187 @@
         // Refresh approvals button
         document.getElementById('refreshApprovalsBtn').addEventListener('click', () => {
             loadPendingApprovals();
+        });
+
+        // Load rejected submissions for data users
+        async function loadRejectedSubmissions() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getRejectedSubmissions&username=' + encodeURIComponent(currentUser);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    displayRejectedSubmissions(result.rejected);
+                }
+            } catch (error) {
+                console.error('Error loading rejected submissions:', error);
+            }
+        }
+
+        function displayRejectedSubmissions(rejected) {
+            const listDiv = document.getElementById('rejectedList');
+            
+            if (rejected.length === 0) {
+                listDiv.innerHTML = '<p class="text-sm text-gray-600 italic">No rejected submissions</p>';
+                return;
+            }
+            
+            // Group by submission ID
+            const grouped = {};
+            rejected.forEach(item => {
+                if (!grouped[item.submissionId]) {
+                    grouped[item.submissionId] = [];
+                }
+                grouped[item.submissionId].push(item);
+            });
+            
+            let html = '';
+            for (let submissionId in grouped) {
+                const items = grouped[submissionId];
+                const firstItem = items[0];
+                
+                html += `<div class="bg-white p-4 mb-4 rounded-lg border border-red-300 shadow-sm">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <p class="font-semibold text-gray-800">Rejected by: ${firstItem.approver}</p>
+                            <p class="text-sm text-gray-600">${items.length} ${items.length === 1 ? 'entry' : 'entries'}</p>
+                        </div>
+                        <div>
+                            <button onclick="loadRejectedToForm('${submissionId}')" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mr-2">📝 Load & Edit</button>
+                            <button onclick="deleteRejectedSubmission('${submissionId}')" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">🗑️ Delete</button>
+                        </div>
+                    </div>
+                    <div class="text-sm">`;
+                
+                items.forEach(item => {
+                    html += `<div class="border-t pt-2 mt-2">
+                        <p><strong>${item.date}</strong> - ${item.client} / ${item.project}</p>
+                        <p class="text-gray-600">${item.activity}</p>
+                        <p class="text-gray-600">Planned: ${item.plannedHours}h | Clockify: ${item.clockifyHours}h | Effective: ${item.effectiveHours}h | ${item.type}</p>
+                    </div>`;
+                });
+                
+                html += `</div></div>`;
+            }
+            
+            listDiv.innerHTML = html;
+        }
+
+        // Load rejected submission back into form for editing
+        window.loadRejectedToForm = async function(submissionId) {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getRejectedSubmissions&username=' + encodeURIComponent(currentUser);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    // Find items for this submission ID
+                    const items = result.rejected.filter(item => item.submissionId === submissionId);
+                    
+                    if (items.length === 0) return;
+                    
+                    // Clear current table
+                    const tbody = document.getElementById('dataTableBody');
+                    tbody.innerHTML = '';
+                    rowCounter = 0;
+                    
+                    // Add each rejected item as a new row
+                    for (let item of items) {
+                        const rowId = rowCounter++;
+                        const row = document.createElement('tr');
+                        row.className = 'hover:bg-gray-50 bg-yellow-50'; // Highlight loaded rows
+                        row.id = `row-${rowId}`;
+                        
+                        row.innerHTML = `
+                            <td class="border border-gray-300 p-2">
+                                <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${item.date}" required>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
+                                    <option value="">Select Client...</option>
+                                    ${clientsList.map(client => `<option value="${client}" ${client === item.client ? 'selected' : ''}>${client}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="${item.project}" selected>${item.project}</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="Activity description" required rows="2">${item.activity}</textarea>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" value="${item.plannedHours}">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required value="${item.clockifyHours}">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required value="${item.effectiveHours}">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="">Select...</option>
+                                    <option value="Recurring" ${item.type === 'Recurring' ? 'selected' : ''}>Recurring</option>
+                                    <option value="Adhoc" ${item.type === 'Adhoc' ? 'selected' : ''}>Adhoc</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="${currentUser}" selected>${currentUser}</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2 text-center">
+                                <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
+                            </td>
+                        `;
+                        
+                        tbody.appendChild(row);
+                    }
+                    
+                    // Delete the rejected submission from Pending Approvals sheet
+                    await fetch(GOOGLE_SCRIPT_URL + '?action=deleteRejectedSubmission&submissionId=' + encodeURIComponent(submissionId));
+                    
+                    // Refresh rejected list
+                    loadRejectedSubmissions();
+                    
+                    // Scroll to top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    
+                    // Show message
+                    const statusDiv = document.getElementById('statusMessage');
+                    statusDiv.className = 'mt-4 p-4 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
+                    statusDiv.textContent = `📝 Loaded ${items.length} rejected ${items.length === 1 ? 'entry' : 'entries'} for editing. Make changes and resubmit!`;
+                    statusDiv.classList.remove('hidden');
+                    
+                    setTimeout(() => {
+                        statusDiv.classList.add('hidden');
+                    }, 5000);
+                }
+            } catch (error) {
+                alert('Error loading rejected submission: ' + error.message);
+            }
+        };
+
+        // Delete rejected submission permanently
+        window.deleteRejectedSubmission = async function(submissionId) {
+            if (!confirm('Permanently delete this rejected submission?')) return;
+            
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=deleteRejectedSubmission&submissionId=' + encodeURIComponent(submissionId);
+                await fetch(url);
+                
+                alert('Rejected submission deleted!');
+                loadRejectedSubmissions();
+                
+            } catch (error) {
+                alert('Error deleting submission: ' + error.message);
+            }
+        };
+
+        // Refresh rejected button
+        document.getElementById('refreshRejectedBtn').addEventListener('click', () => {
+            loadRejectedSubmissions();
         });
 
         // Save Progress functionality
