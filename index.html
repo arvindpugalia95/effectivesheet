@@ -98,19 +98,38 @@
                 💾 Save Progress
             </button>
 
-            <!-- Submit Button -->
-            <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-8 ml-4">
+            <!-- Submit Button (Admin - Direct Submit) -->
+            <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-8 ml-4 hidden">
                 Submit All Entries
             </button>
+
+            <!-- Submit for Approval (Data User) -->
+            <div id="submitForApprovalSection" class="hidden mb-8 ml-4 inline-block">
+                <select id="approverSelect" class="p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 mr-2">
+                    <option value="">Select Admin to Approve...</option>
+                </select>
+                <button id="submitForApprovalBtn" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md">
+                    📤 Submit for Approval
+                </button>
+            </div>
 
             <!-- Status Message -->
             <div id="statusMessage" class="mt-4 mb-8 hidden"></div>
 
+            <!-- Approval Dashboard (Admin Only) -->
+            <div id="approvalDashboard" class="hidden mb-8 p-6 bg-orange-50 border-l-4 border-orange-600 rounded-lg">
+                <h2 class="text-xl font-bold text-orange-900 mb-4">🔔 Pending Approvals</h2>
+                <button id="refreshApprovalsBtn" class="mb-4 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
+                    🔄 Refresh Approvals
+                </button>
+                <div id="approvalsList"></div>
+            </div>
+
             <!-- Divider -->
             <hr class="my-8 border-t-2 border-gray-300">
 
-            <!-- Client Master Section -->
-            <div class="bg-blue-50 border-l-4 border-blue-600 p-6 mb-6 rounded-lg">
+            <!-- Client Master Section (Admin Only) -->
+            <div id="clientMasterSection" class="bg-blue-50 border-l-4 border-blue-600 p-6 mb-6 rounded-lg hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-blue-900">📋 Client Master</h2>
                     <button id="refreshClientsBtn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
@@ -135,8 +154,8 @@
                 </div>
             </div>
 
-            <!-- Project Master Section -->
-            <div class="bg-green-50 border-l-4 border-green-600 p-6 mb-8 rounded-lg">
+            <!-- Project Master Section (Admin Only) -->
+            <div id="projectMasterSection" class="bg-green-50 border-l-4 border-green-600 p-6 mb-8 rounded-lg hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-green-900">🗂️ Project Master</h2>
                     <button id="refreshProjectsBtn" class="bg-green-500 hover:bg-green-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
@@ -195,12 +214,15 @@
 
         // Session Management
         let currentUser = null;
+        let currentUserRole = null; // 'admin' or 'data'
 
         // Check if user is already logged in
         window.addEventListener('load', () => {
             const savedUser = sessionStorage.getItem('loggedInUser');
-            if (savedUser) {
+            const savedRole = sessionStorage.getItem('loggedInUserRole');
+            if (savedUser && savedRole) {
                 currentUser = savedUser;
+                currentUserRole = savedRole;
                 showMainApp();
             }
         });
@@ -237,7 +259,9 @@
                 
                 if (result.status === 'success') {
                     currentUser = username;
+                    currentUserRole = result.role || 'data';
                     sessionStorage.setItem('loggedInUser', username);
+                    sessionStorage.setItem('loggedInUserRole', currentUserRole);
                     showMainApp();
                 } else {
                     errorDiv.textContent = '❌ ' + (result.message || 'Invalid username or password');
@@ -263,7 +287,9 @@
         // Logout functionality
         document.getElementById('logoutBtn').addEventListener('click', () => {
             currentUser = null;
+            currentUserRole = null;
             sessionStorage.removeItem('loggedInUser');
+            sessionStorage.removeItem('loggedInUserRole');
             document.getElementById('loginPage').classList.remove('hidden');
             document.getElementById('mainApp').classList.add('hidden');
             document.getElementById('loginUsername').value = '';
@@ -273,12 +299,31 @@
         function showMainApp() {
             document.getElementById('loginPage').classList.add('hidden');
             document.getElementById('mainApp').classList.remove('hidden');
-            document.getElementById('loggedInUser').textContent = currentUser;
+            document.getElementById('loggedInUser').textContent = currentUser + ' (' + (currentUserRole === 'admin' ? 'Admin' : 'Data User') + ')';
+            
+            // Show/hide sections based on role
+            if (currentUserRole === 'admin') {
+                // Admin can see everything
+                document.getElementById('submitBtn').classList.remove('hidden');
+                document.getElementById('submitForApprovalSection').classList.add('hidden');
+                document.getElementById('clientMasterSection').classList.remove('hidden');
+                document.getElementById('projectMasterSection').classList.remove('hidden');
+                document.getElementById('approvalDashboard').classList.remove('hidden');
+                loadPendingApprovals();
+            } else {
+                // Data user - submit for approval
+                document.getElementById('submitBtn').classList.add('hidden');
+                document.getElementById('submitForApprovalSection').classList.remove('hidden');
+                document.getElementById('clientMasterSection').classList.add('hidden');
+                document.getElementById('projectMasterSection').classList.add('hidden');
+                document.getElementById('approvalDashboard').classList.add('hidden');
+                loadAdminsList();
+            }
             
             // Initialize the app
             loadClients();
             loadProjects();
-            loadSavedProgress(); // Load saved progress instead of adding new row
+            loadSavedProgress();
         }
 
         // Store clients and projects
@@ -687,6 +732,250 @@
         };
 
         document.getElementById('addRowBtn').addEventListener('click', addNewRow);
+
+        // Load admins list for data users
+        async function loadAdminsList() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getAdmins';
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    const select = document.getElementById('approverSelect');
+                    select.innerHTML = '<option value="">Select Admin to Approve...</option>';
+                    
+                    result.admins.forEach(admin => {
+                        const option = document.createElement('option');
+                        option.value = admin;
+                        option.textContent = admin;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading admins:', error);
+            }
+        }
+
+        // Submit for Approval (Data User)
+        document.getElementById('submitForApprovalBtn').addEventListener('click', async () => {
+            const approver = document.getElementById('approverSelect').value;
+            const statusDiv = document.getElementById('statusMessage');
+            const submitBtn = document.getElementById('submitForApprovalBtn');
+            
+            if (!approver) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Please select an admin to approve your submission!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+            
+            const tbody = document.getElementById('dataTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            
+            if (rows.length === 0) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ No entries to submit!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            const activities = [];
+            let hasError = false;
+            
+            rows.forEach((row) => {
+                const date = row.querySelector('.row-date').value;
+                const client = row.querySelector('.row-client').value;
+                const project = row.querySelector('.row-project').value;
+                const activity = row.querySelector('.row-activity').value;
+                const planned = row.querySelector('.row-planned').value;
+                const clockify = row.querySelector('.row-clockify').value;
+                const effective = row.querySelector('.row-effective').value;
+                const type = row.querySelector('.row-type').value;
+                const user = row.querySelector('.row-user').value;
+                
+                if (!date || !client || !project || !activity || !clockify || !effective || !type || !user) {
+                    hasError = true;
+                    row.classList.add('bg-red-50');
+                } else {
+                    row.classList.remove('bg-red-50');
+                    activities.push({
+                        date, clientName: client, project, activity,
+                        plannedHours: planned || '0',
+                        clockifyHours: clockify, effectiveHours: effective,
+                        type, user
+                    });
+                }
+            });
+            
+            if (hasError) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Please fill in all fields in all rows!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+            
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'submitForApproval',
+                        activities: activities,
+                        approver: approver,
+                        submittedBy: currentUser
+                    })
+                });
+
+                statusDiv.className = 'mt-4 p-4 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+                statusDiv.textContent = `✅ Submitted ${activities.length} ${activities.length === 1 ? 'entry' : 'entries'} to ${approver} for approval!`;
+                statusDiv.classList.remove('hidden');
+                
+                // Clear saved progress and table
+                localStorage.removeItem('savedTimesheet_' + currentUser);
+                tbody.innerHTML = '';
+                rowCounter = 0;
+                addNewRow();
+                
+                setTimeout(() => {
+                    statusDiv.classList.add('hidden');
+                }, 5000);
+                
+            } catch (error) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                statusDiv.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '📤 Submit for Approval';
+            }
+        });
+
+        // Load pending approvals for admins
+        async function loadPendingApprovals() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getPendingApprovals&approver=' + encodeURIComponent(currentUser);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    displayApprovals(result.approvals);
+                }
+            } catch (error) {
+                console.error('Error loading approvals:', error);
+            }
+        }
+
+        function displayApprovals(approvals) {
+            const listDiv = document.getElementById('approvalsList');
+            
+            if (approvals.length === 0) {
+                listDiv.innerHTML = '<p class="text-sm text-gray-600 italic">No pending approvals</p>';
+                return;
+            }
+            
+            // Group by submission ID
+            const grouped = {};
+            approvals.forEach(approval => {
+                if (!grouped[approval.submissionId]) {
+                    grouped[approval.submissionId] = [];
+                }
+                grouped[approval.submissionId].push(approval);
+            });
+            
+            let html = '';
+            for (let submissionId in grouped) {
+                const items = grouped[submissionId];
+                const firstItem = items[0];
+                
+                html += `<div class="bg-white p-4 mb-4 rounded-lg border border-orange-300 shadow-sm">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <p class="font-semibold text-gray-800">Submission from: ${firstItem.submittedBy}</p>
+                            <p class="text-sm text-gray-600">Submitted: ${firstItem.submittedAt}</p>
+                            <p class="text-sm text-gray-600">${items.length} ${items.length === 1 ? 'entry' : 'entries'}</p>
+                        </div>
+                        <div>
+                            <button onclick="approveSubmission('${submissionId}')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded mr-2">✓ Approve</button>
+                            <button onclick="rejectSubmission('${submissionId}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">✗ Reject</button>
+                        </div>
+                    </div>
+                    <div class="text-sm">`;
+                
+                items.forEach(item => {
+                    html += `<div class="border-t pt-2 mt-2">
+                        <p><strong>${item.date}</strong> - ${item.client} / ${item.project}</p>
+                        <p class="text-gray-600">${item.activity}</p>
+                        <p class="text-gray-600">Planned: ${item.plannedHours}h | Clockify: ${item.clockifyHours}h | Effective: ${item.effectiveHours}h | ${item.type}</p>
+                    </div>`;
+                });
+                
+                html += `</div></div>`;
+            }
+            
+            listDiv.innerHTML = html;
+        }
+
+        // Approve submission
+        window.approveSubmission = async function(submissionId) {
+            if (!confirm('Approve this submission?')) return;
+            
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'approveSubmission',
+                        submissionId: submissionId,
+                        approvedBy: currentUser
+                    })
+                });
+
+                alert('Submission approved!');
+                loadPendingApprovals();
+                
+            } catch (error) {
+                alert('Error approving submission: ' + error.message);
+            }
+        };
+
+        // Reject submission
+        window.rejectSubmission = async function(submissionId) {
+            if (!confirm('Reject this submission?')) return;
+            
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'rejectSubmission',
+                        submissionId: submissionId
+                    })
+                });
+
+                alert('Submission rejected!');
+                loadPendingApprovals();
+                
+            } catch (error) {
+                alert('Error rejecting submission: ' + error.message);
+            }
+        };
+
+        // Refresh approvals button
+        document.getElementById('refreshApprovalsBtn').addEventListener('click', () => {
+            loadPendingApprovals();
+        });
 
         // Save Progress functionality
         document.getElementById('saveProgressBtn').addEventListener('click', () => {
