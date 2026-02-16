@@ -731,81 +731,97 @@
 
         // Load saved progress on app start
         function loadSavedProgress() {
+            // IMPORTANT: Only load data for the current logged-in user
             const savedData = localStorage.getItem('savedTimesheet_' + currentUser);
+            
+            console.log('Loading saved progress for user:', currentUser);
+            console.log('Saved data found:', savedData ? 'Yes' : 'No');
+            
             if (savedData) {
                 try {
                     const rows = JSON.parse(savedData);
+                    
+                    // Verify this data belongs to current user (double-check)
                     const tbody = document.getElementById('dataTableBody');
                     tbody.innerHTML = '';
                     rowCounter = 0;
                     
                     rows.forEach((rowData) => {
-                        const rowId = rowCounter++;
-                        const row = document.createElement('tr');
-                        row.className = 'hover:bg-gray-50';
-                        row.id = `row-${rowId}`;
-                        
-                        row.innerHTML = `
-                            <td class="border border-gray-300 p-2">
-                                <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${rowData.date}" required>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
-                                    <option value="">Select Client...</option>
-                                    ${clientsList.map(client => `<option value="${client}" ${client === rowData.client ? 'selected' : ''}>${client}</option>`).join('')}
-                                </select>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                                    <option value="${rowData.project}" selected>${rowData.project}</option>
-                                </select>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="Activity description" required rows="2">${rowData.activity}</textarea>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" value="${rowData.planned}">
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required value="${rowData.clockify}">
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required value="${rowData.effective}">
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                                    <option value="">Select...</option>
-                                    <option value="Recurring" ${rowData.type === 'Recurring' ? 'selected' : ''}>Recurring</option>
-                                    <option value="Adhoc" ${rowData.type === 'Adhoc' ? 'selected' : ''}>Adhoc</option>
-                                </select>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                                    <option value="${rowData.user}" selected>${rowData.user}</option>
-                                </select>
-                            </td>
-                            <td class="border border-gray-300 p-2 text-center">
-                                <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
-                            </td>
-                        `;
-                        
-                        tbody.appendChild(row);
+                        // Only load rows that belong to current user
+                        if (rowData.user === currentUser) {
+                            const rowId = rowCounter++;
+                            const row = document.createElement('tr');
+                            row.className = 'hover:bg-gray-50';
+                            row.id = `row-${rowId}`;
+                            
+                            row.innerHTML = `
+                                <td class="border border-gray-300 p-2">
+                                    <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${rowData.date}" required>
+                                </td>
+                                <td class="border border-gray-300 p-2">
+                                    <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
+                                        <option value="">Select Client...</option>
+                                        ${clientsList.map(client => `<option value="${client}" ${client === rowData.client ? 'selected' : ''}>${client}</option>`).join('')}
+                                    </select>
+                                </td>
+                                <td class="border border-gray-300 p-2">
+                                    <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                        <option value="${rowData.project}" selected>${rowData.project}</option>
+                                    </select>
+                                </td>
+                                <td class="border border-gray-300 p-2">
+                                    <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="Activity description" required rows="2">${rowData.activity}</textarea>
+                                </td>
+                                <td class="border border-gray-300 p-2">
+                                    <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" value="${rowData.planned}">
+                                </td>
+                                <td class="border border-gray-300 p-2">
+                                    <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required value="${rowData.clockify}">
+                                </td>
+                                <td class="border border-gray-300 p-2">
+                                    <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required value="${rowData.effective}">
+                                </td>
+                                <td class="border border-gray-300 p-2">
+                                    <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                        <option value="">Select...</option>
+                                        <option value="Recurring" ${rowData.type === 'Recurring' ? 'selected' : ''}>Recurring</option>
+                                        <option value="Adhoc" ${rowData.type === 'Adhoc' ? 'selected' : ''}>Adhoc</option>
+                                    </select>
+                                </td>
+                                <td class="border border-gray-300 p-2">
+                                    <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                        <option value="${currentUser}" selected>${currentUser}</option>
+                                    </select>
+                                </td>
+                                <td class="border border-gray-300 p-2 text-center">
+                                    <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
+                                </td>
+                            `;
+                            
+                            tbody.appendChild(row);
+                        }
                     });
                     
-                    // Show notification
-                    const statusDiv = document.getElementById('statusMessage');
-                    statusDiv.className = 'mt-4 p-4 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
-                    statusDiv.textContent = `📂 Restored ${rows.length} saved ${rows.length === 1 ? 'entry' : 'entries'}`;
-                    statusDiv.classList.remove('hidden');
-                    
-                    setTimeout(() => {
-                        statusDiv.classList.add('hidden');
-                    }, 3000);
+                    if (rowCounter > 0) {
+                        // Show notification only if data was loaded
+                        const statusDiv = document.getElementById('statusMessage');
+                        statusDiv.className = 'mt-4 p-4 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
+                        statusDiv.textContent = `📂 Restored ${rowCounter} saved ${rowCounter === 1 ? 'entry' : 'entries'} for ${currentUser}`;
+                        statusDiv.classList.remove('hidden');
+                        
+                        setTimeout(() => {
+                            statusDiv.classList.add('hidden');
+                        }, 3000);
+                    } else {
+                        // No data for this user, add blank row
+                        addNewRow();
+                    }
                 } catch (e) {
                     console.error('Error loading saved progress:', e);
                     addNewRow();
                 }
             } else {
+                // No saved data, add blank row
                 addNewRow();
             }
         }
