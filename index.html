@@ -301,6 +301,10 @@
             document.getElementById('mainApp').classList.remove('hidden');
             document.getElementById('loggedInUser').textContent = currentUser + ' (' + (currentUserRole === 'admin' ? 'Admin' : 'Data User') + ')';
             
+            // Load clients and projects for ALL users (they need it for dropdowns)
+            loadClients();
+            loadProjects();
+            
             // Show/hide sections based on role
             if (currentUserRole === 'admin') {
                 // Admin can see everything
@@ -314,15 +318,14 @@
                 // Data user - submit for approval
                 document.getElementById('submitBtn').classList.add('hidden');
                 document.getElementById('submitForApprovalSection').classList.remove('hidden');
+                // Hide MANAGEMENT sections but still load data for dropdowns
                 document.getElementById('clientMasterSection').classList.add('hidden');
                 document.getElementById('projectMasterSection').classList.add('hidden');
                 document.getElementById('approvalDashboard').classList.add('hidden');
                 loadAdminsList();
             }
             
-            // Initialize the app
-            loadClients();
-            loadProjects();
+            // Load saved progress for current user
             loadSavedProgress();
         }
 
