@@ -74,6 +74,7 @@
                             <th class="border border-gray-300 p-3 text-left font-semibold">Client Name</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Project (As per Clockify)</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Activity</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">Planned Hours</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Clockify Hours</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Effective Hours</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Recurring/Adhoc</th>
@@ -92,8 +93,13 @@
                 <span class="text-xl mr-2">+</span> Add Row
             </button>
 
+            <!-- Save Progress Button -->
+            <button id="saveProgressBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-4 ml-4">
+                💾 Save Progress
+            </button>
+
             <!-- Submit Button -->
-            <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-8">
+            <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-8 ml-4">
                 Submit All Entries
             </button>
 
@@ -272,7 +278,7 @@
             // Initialize the app
             loadClients();
             loadProjects();
-            addNewRow();
+            loadSavedProgress(); // Load saved progress instead of adding new row
         }
 
         // Store clients and projects
@@ -622,6 +628,9 @@
                     <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="Activity description" required rows="2"></textarea>
                 </td>
                 <td class="border border-gray-300 p-2">
+                    <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0">
+                </td>
+                <td class="border border-gray-300 p-2">
                     <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required>
                 </td>
                 <td class="border border-gray-300 p-2">
@@ -679,6 +688,128 @@
 
         document.getElementById('addRowBtn').addEventListener('click', addNewRow);
 
+        // Save Progress functionality
+        document.getElementById('saveProgressBtn').addEventListener('click', () => {
+            const statusDiv = document.getElementById('statusMessage');
+            const tbody = document.getElementById('dataTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            
+            if (rows.length === 0) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ No entries to save!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Save to browser localStorage
+            const savedData = [];
+            rows.forEach((row) => {
+                const rowData = {
+                    date: row.querySelector('.row-date').value,
+                    client: row.querySelector('.row-client').value,
+                    project: row.querySelector('.row-project').value,
+                    activity: row.querySelector('.row-activity').value,
+                    planned: row.querySelector('.row-planned').value,
+                    clockify: row.querySelector('.row-clockify').value,
+                    effective: row.querySelector('.row-effective').value,
+                    type: row.querySelector('.row-type').value,
+                    user: row.querySelector('.row-user').value
+                };
+                savedData.push(rowData);
+            });
+
+            localStorage.setItem('savedTimesheet_' + currentUser, JSON.stringify(savedData));
+            
+            statusDiv.className = 'mt-4 p-4 bg-purple-100 border border-purple-400 text-purple-800 rounded-lg';
+            statusDiv.textContent = `💾 Progress saved! ${savedData.length} ${savedData.length === 1 ? 'entry' : 'entries'} saved locally.`;
+            statusDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 3000);
+        });
+
+        // Load saved progress on app start
+        function loadSavedProgress() {
+            const savedData = localStorage.getItem('savedTimesheet_' + currentUser);
+            if (savedData) {
+                try {
+                    const rows = JSON.parse(savedData);
+                    const tbody = document.getElementById('dataTableBody');
+                    tbody.innerHTML = '';
+                    rowCounter = 0;
+                    
+                    rows.forEach((rowData) => {
+                        const rowId = rowCounter++;
+                        const row = document.createElement('tr');
+                        row.className = 'hover:bg-gray-50';
+                        row.id = `row-${rowId}`;
+                        
+                        row.innerHTML = `
+                            <td class="border border-gray-300 p-2">
+                                <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${rowData.date}" required>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
+                                    <option value="">Select Client...</option>
+                                    ${clientsList.map(client => `<option value="${client}" ${client === rowData.client ? 'selected' : ''}>${client}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="${rowData.project}" selected>${rowData.project}</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="Activity description" required rows="2">${rowData.activity}</textarea>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" value="${rowData.planned}">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required value="${rowData.clockify}">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required value="${rowData.effective}">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="">Select...</option>
+                                    <option value="Recurring" ${rowData.type === 'Recurring' ? 'selected' : ''}>Recurring</option>
+                                    <option value="Adhoc" ${rowData.type === 'Adhoc' ? 'selected' : ''}>Adhoc</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="${rowData.user}" selected>${rowData.user}</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2 text-center">
+                                <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
+                            </td>
+                        `;
+                        
+                        tbody.appendChild(row);
+                    });
+                    
+                    // Show notification
+                    const statusDiv = document.getElementById('statusMessage');
+                    statusDiv.className = 'mt-4 p-4 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
+                    statusDiv.textContent = `📂 Restored ${rows.length} saved ${rows.length === 1 ? 'entry' : 'entries'}`;
+                    statusDiv.classList.remove('hidden');
+                    
+                    setTimeout(() => {
+                        statusDiv.classList.add('hidden');
+                    }, 3000);
+                } catch (e) {
+                    console.error('Error loading saved progress:', e);
+                    addNewRow();
+                }
+            } else {
+                addNewRow();
+            }
+        }
+
         // Submit all entries
         document.getElementById('submitBtn').addEventListener('click', async () => {
             const statusDiv = document.getElementById('statusMessage');
@@ -702,6 +833,7 @@
                 const client = row.querySelector('.row-client').value;
                 const project = row.querySelector('.row-project').value;
                 const activity = row.querySelector('.row-activity').value;
+                const planned = row.querySelector('.row-planned').value;
                 const clockify = row.querySelector('.row-clockify').value;
                 const effective = row.querySelector('.row-effective').value;
                 const type = row.querySelector('.row-type').value;
@@ -714,6 +846,7 @@
                     row.classList.remove('bg-red-50');
                     activities.push({
                         date, clientName: client, project, activity,
+                        plannedHours: planned || '0',
                         clockifyHours: clockify, effectiveHours: effective,
                         type, user
                     });
@@ -753,6 +886,9 @@
                 statusDiv.className = 'mt-4 p-4 bg-green-100 border border-green-400 text-green-800 rounded-lg';
                 statusDiv.textContent = `✅ Successfully submitted ${activities.length} ${activities.length === 1 ? 'entry' : 'entries'}!`;
                 statusDiv.classList.remove('hidden');
+                
+                // Clear saved progress from localStorage
+                localStorage.removeItem('savedTimesheet_' + currentUser);
                 
                 // Clear all rows and add one fresh row
                 tbody.innerHTML = '';
