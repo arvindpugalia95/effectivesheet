@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Activity Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+        <div class="bg-white rounded-lg shadow-md p-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Client Activity Tracker</h1>
+            <p class="text-gray-600 mb-6">Enter daily client activities</p>
+            
+            <!-- Test Connection Button -->
+            <div class="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-semibold text-yellow-900 mb-1">🔍 Connection Test</h3>
+                        <p class="text-sm text-yellow-800">Click to test if the Google Apps Script is working</p>
+                    </div>
+                    <button id="testConnectionBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200">
+                        Test Connection
+                    </button>
+                </div>
+                <div id="testResult" class="mt-3 hidden"></div>
+            </div>
+            
+            <!-- Client Master Section -->
+            <div class="bg-blue-50 border-l-4 border-blue-600 p-6 mb-6 rounded-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-blue-900">📋 Client Master</h2>
+                    <button id="refreshClientsBtn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
+                        🔄 Refresh
+                    </button>
+                </div>
+                <div class="flex gap-4 items-end">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-blue-900 mb-2">Add New Client</label>
+                        <input type="text" id="newClientName" class="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Enter client name...">
+                    </div>
+                    <button id="addClientBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 shadow-md">
+                        Add Client
+                    </button>
+                </div>
+                <div id="clientMasterStatus" class="mt-3 hidden"></div>
+                <div class="mt-4">
+                    <p class="text-sm text-blue-800 font-medium mb-2">Current Clients:</p>
+                    <div id="clientList" class="flex flex-wrap gap-2">
+                        <span class="text-sm text-gray-500 italic">Loading clients...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project Master Section -->
+            <div class="bg-green-50 border-l-4 border-green-600 p-6 mb-8 rounded-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-green-900">🗂️ Project Master</h2>
+                    <button id="refreshProjectsBtn" class="bg-green-500 hover:bg-green-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
+                        🔄 Refresh
+                    </button>
+                </div>
+                <div class="flex gap-4 items-end">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-green-900 mb-2">Select Client</label>
+                        <select id="projectClientSelect" class="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                            <option value="">Select Client...</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-green-900 mb-2">Project Name</label>
+                        <input type="text" id="newProjectName" class="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500" placeholder="Enter project name...">
+                    </div>
+                    <button id="addProjectBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 shadow-md">
+                        Add Project
+                    </button>
+                </div>
+                <div id="projectMasterStatus" class="mt-3 hidden"></div>
+                <div class="mt-4">
+                    <p class="text-sm text-green-800 font-medium mb-2">Projects by Client:</p>
+                    <div id="projectList" class="space-y-2">
+                        <span class="text-sm text-gray-500 italic">Loading projects...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Data Entry Table -->
+            <div class="overflow-x-auto mb-6">
+                <table class="w-full border-collapse border border-gray-300">
+                    <thead>
+                        <tr class="bg-blue-600 text-white">
+                            <th class="border border-gray-300 p-3 text-left font-semibold">DATE</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">Client Name</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">Project (As per Clockify)</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">Activity</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">Clockify Hours</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">Effective Hours</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">Recurring/Adhoc</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">User</th>
+                            <th class="border border-gray-300 p-3 text-center font-semibold w-20">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody">
+                        <!-- Rows will be added here dynamically -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Add Row Button -->
+            <button id="addRowBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 shadow-md mb-4">
+                <span class="text-xl mr-2">+</span> Add Row
+            </button>
+
+            <!-- Submit Button -->
+            <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md">
+                Submit All Entries
+            </button>
+
+            <!-- Status Message -->
+            <div id="statusMessage" class="mt-4 hidden"></div>
+
+            <!-- Setup Instructions -->
+            <div class="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 class="font-semibold text-blue-900 mb-2">🔧 Google Sheets Setup Instructions</h3>
+                <ol class="text-sm text-blue-800 space-y-2 list-decimal list-inside">
+                    <li>Create a new Google Sheet</li>
+                    <li>The app will automatically create separate sheets for each client when you add them</li>
+                    <li>Each client sheet will have headers: <strong>DATE | Client Name | Project | Activity | Clockify Hours | Effective Hours | Recurring/Adhoc | User | Timestamp</strong></li>
+                    <li>Go to <strong>Extensions > Apps Script</strong></li>
+                    <li>Paste the provided Apps Script code (see below)</li>
+                    <li>Deploy as Web App (Execute as: Me, Access: Anyone)</li>
+                    <li>Copy the Web App URL and paste it in the JavaScript code below (replace YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE)</li>
+                </ol>
+            </div>
+
+            <div class="mt-4 p-4 bg-gray-100 border border-gray-300 rounded-lg">
+                <h3 class="font-semibold text-gray-800 mb-2">📋 Apps Script Code (Use the provided apps-script-code.gs file)</h3>
+                <p class="text-sm text-gray-700 mb-2">Make sure you've copied the code from the <strong>apps-script-code.gs</strong> file into your Google Apps Script editor, saved it, and deployed it with "Who has access" set to <strong>"Anyone"</strong>.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // IMPORTANT: Replace this URL with your Google Apps Script Web App URL
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzlKdHrNToeJrV9X6Z4bV_QC0rL9HzhW7i_QjFFEmM-Bmypbkf7aJrF1VWB0pM6TXo8/exec';
+
+        // Store clients and projects
+        let clientsList = [];
+        let projectsMap = {}; // { clientName: [project1, project2, ...] }
+        let rowCounter = 0;
+
+        // Load clients and projects on page load
+        window.addEventListener('load', async () => {
+            await loadClients();
+            await loadProjects();
+            addNewRow(); // Add first row
+        });
+
+        // Test Connection Button
+        document.getElementById('testConnectionBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('testConnectionBtn');
+            const resultDiv = document.getElementById('testResult');
+            
+            btn.disabled = true;
+            btn.textContent = 'Testing...';
+            resultDiv.classList.remove('hidden');
+            resultDiv.className = 'mt-3 p-3 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
+            resultDiv.innerHTML = '🔄 Testing connection...';
+            
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getClients';
+                console.log('Testing URL:', url);
+                
+                const response = await fetch(url);
+                console.log('Response received:', response);
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+                
+                const text = await response.text();
+                console.log('Response text:', text);
+                
+                if (!response.ok) {
+                    resultDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                    resultDiv.innerHTML = `❌ <strong>HTTP Error ${response.status}</strong><br>
+                        <span class="text-sm">The script returned an error. This usually means:</span><br>
+                        <ul class="text-sm list-disc ml-5 mt-2">
+                            <li>Script not deployed properly</li>
+                            <li>"Who has access" not set to "Anyone"</li>
+                            <li>Wrong URL in the HTML file</li>
+                        </ul>`;
+                    btn.disabled = false;
+                    btn.textContent = 'Test Connection';
+                    return;
+                }
+                
+                const result = JSON.parse(text);
+                console.log('Parsed result:', result);
+                
+                if (result.status === 'success') {
+                    resultDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+                    resultDiv.innerHTML = `✅ <strong>Connection Successful!</strong><br>
+                        <span class="text-sm">Script is working correctly.</span><br>
+                        <span class="text-sm">Clients found: ${result.clients.length}</span>`;
+                } else {
+                    resultDiv.className = 'mt-3 p-3 bg-orange-100 border border-orange-400 text-orange-800 rounded-lg';
+                    resultDiv.innerHTML = `⚠️ <strong>Script Error:</strong> ${result.message}`;
+                }
+                
+            } catch (error) {
+                console.error('Connection test failed:', error);
+                resultDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                resultDiv.innerHTML = `❌ <strong>Connection Failed: ${error.message}</strong><br>
+                    <span class="text-sm mt-2 block">Common causes:</span>
+                    <ul class="text-sm list-disc ml-5 mt-1">
+                        <li><strong>CORS Error:</strong> Script not properly deployed or "Who has access" not set to "Anyone"</li>
+                        <li><strong>Network Error:</strong> Check your internet connection</li>
+                        <li><strong>Authorization Required:</strong> Open the script URL directly in browser to authorize</li>
+                    </ul>
+                    <div class="mt-2 text-sm">
+                        <strong>Try this:</strong> Open this URL in a new tab:<br>
+                        <a href="${GOOGLE_SCRIPT_URL}?action=getClients" target="_blank" class="text-blue-600 underline break-all">${GOOGLE_SCRIPT_URL}?action=getClients</a>
+                    </div>`;
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Test Connection';
+        });
+
+        // Refresh buttons
+        document.getElementById('refreshClientsBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('refreshClientsBtn');
+            btn.disabled = true;
+            btn.textContent = 'Loading...';
+            await loadClients();
+            btn.disabled = false;
+            btn.textContent = '🔄 Refresh';
+        });
+
+        document.getElementById('refreshProjectsBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('refreshProjectsBtn');
+            btn.disabled = true;
+            btn.textContent = 'Loading...';
+            await loadProjects();
+            btn.disabled = false;
+            btn.textContent = '🔄 Refresh';
+        });
+
+        async function loadClients() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getClients&t=' + Date.now();
+                console.log('Fetching clients from:', url);
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    redirect: 'follow',
+                    mode: 'cors'
+                });
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                console.log('Response text:', text);
+                
+                const result = JSON.parse(text);
+                console.log('Parsed result:', result);
+                
+                if (result.status === 'success') {
+                    clientsList = result.clients || [];
+                    updateClientList();
+                    updateProjectClientSelect();
+                } else {
+                    throw new Error(result.message || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error loading clients:', error);
+                const clientListDiv = document.getElementById('clientList');
+                clientListDiv.innerHTML = `<span class="text-sm text-red-600">⚠️ Error: ${error.message}. Click refresh to try again.</span>`;
+            }
+        }
+
+        async function loadProjects() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getProjects&t=' + Date.now();
+                console.log('Fetching projects from:', url);
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    redirect: 'follow',
+                    mode: 'cors'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                const result = JSON.parse(text);
+                
+                if (result.status === 'success') {
+                    projectsMap = result.projects || {};
+                    updateProjectList();
+                } else {
+                    throw new Error(result.message || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error loading projects:', error);
+                const projectListDiv = document.getElementById('projectList');
+                projectListDiv.innerHTML = `<span class="text-sm text-red-600">⚠️ Error: ${error.message}. Click refresh to try again.</span>`;
+            }
+        }
+
+        function updateClientList() {
+            const clientListDiv = document.getElementById('clientList');
+            
+            if (clientsList.length === 0) {
+                clientListDiv.innerHTML = '<span class="text-sm text-gray-500 italic">No clients added yet</span>';
+                return;
+            }
+            
+            clientListDiv.innerHTML = clientsList.map(client => 
+                `<span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">${client}</span>`
+            ).join('');
+        }
+
+        function updateProjectClientSelect() {
+            const select = document.getElementById('projectClientSelect');
+            select.innerHTML = '<option value="">Select Client...</option>';
+            
+            clientsList.forEach(client => {
+                const option = document.createElement('option');
+                option.value = client;
+                option.textContent = client;
+                select.appendChild(option);
+            });
+        }
+
+        function updateProjectList() {
+            const projectListDiv = document.getElementById('projectList');
+            
+            if (Object.keys(projectsMap).length === 0) {
+                projectListDiv.innerHTML = '<span class="text-sm text-gray-500 italic">No projects added yet</span>';
+                return;
+            }
+            
+            let html = '';
+            for (let client in projectsMap) {
+                html += `<div class="bg-white p-3 rounded-lg border border-green-200">
+                    <p class="font-semibold text-green-900 mb-2">${client}:</p>
+                    <div class="flex flex-wrap gap-2">`;
+                
+                projectsMap[client].forEach(project => {
+                    html += `<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">${project}</span>`;
+                });
+                
+                html += `</div></div>`;
+            }
+            
+            projectListDiv.innerHTML = html;
+        }
+
+        // Add client functionality
+        document.getElementById('addClientBtn').addEventListener('click', async () => {
+            const newClientName = document.getElementById('newClientName').value.trim();
+            const statusDiv = document.getElementById('clientMasterStatus');
+            const addBtn = document.getElementById('addClientBtn');
+            
+            if (!newClientName) {
+                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Please enter a client name!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            if (GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
+                statusDiv.className = 'mt-3 p-3 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg';
+                statusDiv.textContent = '⚠️ Please configure your Google Apps Script Web App URL first';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            addBtn.disabled = true;
+            addBtn.textContent = 'Adding...';
+            
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        action: 'addClient',
+                        clientName: newClientName 
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    statusDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+                    statusDiv.textContent = '✅ Client added successfully!';
+                    statusDiv.classList.remove('hidden');
+                    
+                    clientsList = result.clients || [...clientsList, newClientName];
+                    updateClientList();
+                    updateProjectClientSelect();
+                    
+                    document.getElementById('newClientName').value = '';
+                    
+                    setTimeout(() => {
+                        statusDiv.classList.add('hidden');
+                    }, 3000);
+                } else {
+                    statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                    statusDiv.textContent = '❌ ' + result.message;
+                    statusDiv.classList.remove('hidden');
+                }
+                
+            } catch (error) {
+                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                statusDiv.classList.remove('hidden');
+            } finally {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Client';
+            }
+        });
+
+        // Add project functionality
+        document.getElementById('addProjectBtn').addEventListener('click', async () => {
+            const clientName = document.getElementById('projectClientSelect').value;
+            const projectName = document.getElementById('newProjectName').value.trim();
+            const statusDiv = document.getElementById('projectMasterStatus');
+            const addBtn = document.getElementById('addProjectBtn');
+            
+            if (!clientName || !projectName) {
+                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Please select a client and enter a project name!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            if (GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
+                statusDiv.className = 'mt-3 p-3 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg';
+                statusDiv.textContent = '⚠️ Please configure your Google Apps Script Web App URL first';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            addBtn.disabled = true;
+            addBtn.textContent = 'Adding...';
+            
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        action: 'addProject',
+                        clientName: clientName,
+                        projectName: projectName
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    statusDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+                    statusDiv.textContent = '✅ Project added successfully!';
+                    statusDiv.classList.remove('hidden');
+                    
+                    projectsMap = result.projects || projectsMap;
+                    updateProjectList();
+                    
+                    document.getElementById('newProjectName').value = '';
+                    document.getElementById('projectClientSelect').value = '';
+                    
+                    setTimeout(() => {
+                        statusDiv.classList.add('hidden');
+                    }, 3000);
+                } else {
+                    statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                    statusDiv.textContent = '❌ ' + result.message;
+                    statusDiv.classList.remove('hidden');
+                }
+                
+            } catch (error) {
+                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                statusDiv.classList.remove('hidden');
+            } finally {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Project';
+            }
+        });
+
+        // Add new row functionality
+        function addNewRow() {
+            const tbody = document.getElementById('dataTableBody');
+            const rowId = rowCounter++;
+            
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50';
+            row.id = `row-${rowId}`;
+            
+            const today = new Date().toISOString().split('T')[0];
+            
+            row.innerHTML = `
+                <td class="border border-gray-300 p-2">
+                    <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${today}" required>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
+                        <option value="">Select Client...</option>
+                        ${clientsList.map(client => `<option value="${client}">${client}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                        <option value="">Select Client First...</option>
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <input type="text" class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" placeholder="Activity description" required>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                        <option value="">Select...</option>
+                        <option value="Recurring">Recurring</option>
+                        <option value="Adhoc">Adhoc</option>
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                        <option value="">Select User...</option>
+                        ${[1,2,3,4,5,6,7,8,9,10].map(i => `<option value="User ${i}">User ${i}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2 text-center">
+                    <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
+                </td>
+            `;
+            
+            tbody.appendChild(row);
+        }
+
+        window.updateProjectDropdown = function(rowId) {
+            const row = document.getElementById(`row-${rowId}`);
+            const clientSelect = row.querySelector('.row-client');
+            const projectSelect = row.querySelector('.row-project');
+            
+            const selectedClient = clientSelect.value;
+            
+            if (!selectedClient) {
+                projectSelect.innerHTML = '<option value="">Select Client First...</option>';
+                return;
+            }
+            
+            const projects = projectsMap[selectedClient] || [];
+            
+            if (projects.length === 0) {
+                projectSelect.innerHTML = '<option value="">No projects for this client</option>';
+                return;
+            }
+            
+            projectSelect.innerHTML = '<option value="">Select Project...</option>' + 
+                projects.map(project => `<option value="${project}">${project}</option>`).join('');
+        };
+
+        window.deleteRow = function(rowId) {
+            const row = document.getElementById(`row-${rowId}`);
+            if (row) {
+                row.remove();
+            }
+        };
+
+        document.getElementById('addRowBtn').addEventListener('click', addNewRow);
+
+        // Submit all entries
+        document.getElementById('submitBtn').addEventListener('click', async () => {
+            const statusDiv = document.getElementById('statusMessage');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            const tbody = document.getElementById('dataTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            
+            if (rows.length === 0) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ No entries to submit!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            const activities = [];
+            let hasError = false;
+            
+            rows.forEach((row, index) => {
+                const date = row.querySelector('.row-date').value;
+                const client = row.querySelector('.row-client').value;
+                const project = row.querySelector('.row-project').value;
+                const activity = row.querySelector('.row-activity').value;
+                const clockify = row.querySelector('.row-clockify').value;
+                const effective = row.querySelector('.row-effective').value;
+                const type = row.querySelector('.row-type').value;
+                const user = row.querySelector('.row-user').value;
+                
+                if (!date || !client || !project || !activity || !clockify || !effective || !type || !user) {
+                    hasError = true;
+                    row.classList.add('bg-red-50');
+                } else {
+                    row.classList.remove('bg-red-50');
+                    activities.push({
+                        date, clientName: client, project, activity,
+                        clockifyHours: clockify, effectiveHours: effective,
+                        type, user
+                    });
+                }
+            });
+            
+            if (hasError) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Please fill in all fields in all rows!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            if (GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
+                statusDiv.className = 'mt-4 p-4 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg';
+                statusDiv.textContent = '⚠️ Please configure your Google Apps Script Web App URL first';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+            
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'submitActivities',
+                        activities: activities
+                    })
+                });
+
+                statusDiv.className = 'mt-4 p-4 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+                statusDiv.textContent = `✅ Successfully submitted ${activities.length} ${activities.length === 1 ? 'entry' : 'entries'}!`;
+                statusDiv.classList.remove('hidden');
+                
+                // Clear all rows and add one fresh row
+                tbody.innerHTML = '';
+                rowCounter = 0;
+                addNewRow();
+                
+                setTimeout(() => {
+                    statusDiv.classList.add('hidden');
+                }, 3000);
+                
+            } catch (error) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                statusDiv.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit All Entries';
+            }
+        });
+    </script>
+</body>
+</html>
