@@ -7,7 +7,9 @@ const CONFIG = {
 // Global state
 const STATE = {
     currentUser: null,
+    userRole: null,
     clientsList: [],
     projectsMap: {}, // { clientName: [project1, project2, ...] }
+    adminsList: [],
     rowCounter: 0
 };
