@@ -1,0 +1,33 @@
+/* Custom Styles for Client Activity Tracker */
+/* Most styling is handled by Tailwind CSS, but you can add custom styles here */
+
+/* Optional: Add smooth transitions */
+button {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Optional: Custom scrollbar for better appearance */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Optional: Print styles */
+@media print {
+    .no-print {
+        display: none;
+    }
+}
