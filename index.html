@@ -45,7 +45,7 @@
             <!-- Modal Body -->
             <div class="p-6 overflow-y-auto max-h-[60vh]">
                 <!-- Summary Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                     <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
                         <p class="text-sm text-gray-600 mb-1">Total Entries</p>
                         <p class="text-3xl font-bold text-blue-600" id="reviewTotalEntries">0</p>
@@ -60,6 +60,10 @@
                             <span id="reviewTotalEffective">0.00</span>
                             <span class="text-sm text-gray-500 ml-2">(<span id="reviewPercentage">0</span>%)</span>
                         </p>
+                    </div>
+                    <div class="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                        <p class="text-sm text-gray-600 mb-1">Total Billed Hours</p>
+                        <p class="text-3xl font-bold text-orange-600" id="reviewTotalBilled">0.00</p>
                     </div>
                 </div>
 
@@ -76,6 +80,7 @@
                                 <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Planned</th>
                                 <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Clockify</th>
                                 <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Effective</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Billed</th>
                                 <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Type</th>
                                 <th class="border border-gray-300 p-2 text-left text-sm font-semibold" id="adminColumnHeader">Admin</th>
                             </tr>
@@ -120,7 +125,7 @@
             <!-- Hours Summary Card -->
             <div class="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-600 rounded-lg shadow-sm">
                 <h3 class="text-lg font-bold text-blue-900 mb-4">📊 Hours Summary</h3>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div class="bg-white p-4 rounded-lg shadow-sm">
                         <p class="text-sm text-gray-600 mb-1">Planned Hours</p>
                         <p class="text-3xl font-bold text-blue-600" id="totalPlannedHours">0.00</p>
@@ -135,6 +140,10 @@
                             <span id="totalEffectiveHours">0.00</span>
                             <span class="text-sm text-gray-500 ml-2">(<span id="effectivePercentage">0</span>%)</span>
                         </p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm">
+                        <p class="text-sm text-gray-600 mb-1">Billed Hours</p>
+                        <p class="text-3xl font-bold text-orange-600" id="totalBilledHours">0.00</p>
                     </div>
                 </div>
             </div>
@@ -165,6 +174,7 @@
                             <th class="border border-gray-300 p-3 text-left font-semibold">Planned Hours</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Clockify Hours</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Effective Hours</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">Billed Hours</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Admin</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Recurring/Adhoc</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">User</th>
@@ -308,21 +318,25 @@
             let totalPlanned = 0;
             let totalClockify = 0;
             let totalEffective = 0;
+            let totalBilled = 0;
             
             rows.forEach((row) => {
                 const planned = parseFloat(row.querySelector('.row-planned')?.value || 0);
                 const clockify = parseFloat(row.querySelector('.row-clockify')?.value || 0);
                 const effective = parseFloat(row.querySelector('.row-effective')?.value || 0);
+                const billed = parseFloat(row.querySelector('.row-billed')?.value || 0);
                 
                 totalPlanned += planned;
                 totalClockify += clockify;
                 totalEffective += effective;
+                totalBilled += billed;
             });
             
             // Update display
             document.getElementById('totalPlannedHours').textContent = totalPlanned.toFixed(2);
             document.getElementById('totalClockifyHours').textContent = totalClockify.toFixed(2);
             document.getElementById('totalEffectiveHours').textContent = totalEffective.toFixed(2);
+            document.getElementById('totalBilledHours').textContent = totalBilled.toFixed(2);
             
             // Calculate percentage
             const percentage = totalClockify > 0 ? ((totalEffective / totalClockify) * 100).toFixed(0) : 0;
@@ -339,14 +353,17 @@
             
             let totalClockify = 0;
             let totalEffective = 0;
+            let totalBilled = 0;
             
             activities.forEach(activity => {
                 totalClockify += parseFloat(activity.clockifyHours);
                 totalEffective += parseFloat(activity.effectiveHours);
+                totalBilled += parseFloat(activity.billedHours);
             });
             
             document.getElementById('reviewTotalClockify').textContent = totalClockify.toFixed(2);
             document.getElementById('reviewTotalEffective').textContent = totalEffective.toFixed(2);
+            document.getElementById('reviewTotalBilled').textContent = totalBilled.toFixed(2);
             
             const percentage = totalClockify > 0 ? ((totalEffective / totalClockify) * 100).toFixed(0) : 0;
             document.getElementById('reviewPercentage').textContent = percentage;
@@ -381,6 +398,7 @@
                     <td class="border border-gray-300 p-2 text-sm text-center">${activity.plannedHours}h</td>
                     <td class="border border-gray-300 p-2 text-sm text-center font-semibold text-purple-600">${activity.clockifyHours}h</td>
                     <td class="border border-gray-300 p-2 text-sm text-center font-semibold text-green-600">${activity.effectiveHours}h</td>
+                    <td class="border border-gray-300 p-2 text-sm text-center font-semibold text-orange-600">${activity.billedHours}h</td>
                     <td class="border border-gray-300 p-2 text-sm">
                         <span class="px-2 py-1 rounded text-xs ${activity.type === 'Recurring' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}">
                             ${activity.type}
@@ -469,13 +487,13 @@
         });
 
         // Check if user is already logged in
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
             const savedUser = sessionStorage.getItem('loggedInUser');
             const savedRole = sessionStorage.getItem('loggedInUserRole');
             if (savedUser && savedRole) {
                 currentUser = savedUser;
                 currentUserRole = savedRole;
-                showMainApp();
+                await showMainApp();
             }
         });
 
@@ -507,7 +525,7 @@
                     currentUserRole = result.role || 'data';
                     sessionStorage.setItem('loggedInUser', username);
                     sessionStorage.setItem('loggedInUserRole', currentUserRole);
-                    showMainApp();
+                    await showMainApp();
                 } else {
                     errorDiv.textContent = '❌ ' + (result.message || 'Invalid username or password');
                     errorDiv.classList.remove('hidden');
@@ -541,15 +559,17 @@
             document.getElementById('loginPassword').value = '';
         });
 
-        function showMainApp() {
+        async function showMainApp() {
             document.getElementById('loginPage').classList.add('hidden');
             document.getElementById('mainApp').classList.remove('hidden');
             document.getElementById('loggedInUser').textContent = currentUser + ' (' + (currentUserRole === 'admin' ? 'Admin' : 'Data User') + ')';
             
-            // Load data for ALL users
-            loadClients();
-            loadProjects();
-            loadAdminsList();
+            // Load data for ALL users - WAIT for them to complete
+            await Promise.all([
+                loadClients(),
+                loadProjects(),
+                loadAdminsList()
+            ]);
             
             // Show/hide sections based on role
             if (currentUserRole === 'admin') {
@@ -570,6 +590,7 @@
                 loadRejectedSubmissions();
             }
             
+            // Load saved progress AFTER data is loaded
             loadSavedProgress();
             updateTotals();
         }
@@ -760,6 +781,9 @@
                     <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
                 </td>
                 <td class="border border-gray-300 p-2">
+                    <input type="number" class="row-billed w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
+                </td>
+                <td class="border border-gray-300 p-2">
                     <select class="row-admin w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
                         <option value="">Select Admin...</option>
                         ${adminsList.map(admin => `<option value="${admin}">${admin}</option>`).join('')}
@@ -839,6 +863,7 @@
                     planned: row.querySelector('.row-planned').value,
                     clockify: row.querySelector('.row-clockify').value,
                     effective: row.querySelector('.row-effective').value,
+                    billed: row.querySelector('.row-billed').value,
                     admin: row.querySelector('.row-admin').value,
                     type: row.querySelector('.row-type').value,
                     user: row.querySelector('.row-user').value
@@ -901,6 +926,9 @@
                             </td>
                             <td class="border border-gray-300 p-2">
                                 <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" required value="${rowData.effective}" oninput="updateTotals()">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-billed w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" required value="${rowData.billed || '0'}" oninput="updateTotals()">
                             </td>
                             <td class="border border-gray-300 p-2">
                                 <select class="row-admin w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
@@ -969,11 +997,12 @@
                 const planned = row.querySelector('.row-planned').value;
                 const clockify = row.querySelector('.row-clockify').value;
                 const effective = row.querySelector('.row-effective').value;
+                const billed = row.querySelector('.row-billed').value;
                 const admin = row.querySelector('.row-admin').value;
                 const type = row.querySelector('.row-type').value;
                 const user = row.querySelector('.row-user').value;
                 
-                if (!date || !client || !project || !activity || !clockify || !effective || !admin || !type || !user) {
+                if (!date || !client || !project || !activity || !clockify || !effective || !billed || !admin || !type || !user) {
                     hasError = true;
                     row.classList.add('bg-red-50');
                 } else {
@@ -983,6 +1012,7 @@
                         plannedHours: planned || '0',
                         clockifyHours: clockify,
                         effectiveHours: effective,
+                        billedHours: billed,
                         adminAssigned: admin,
                         type, user
                     });
@@ -991,7 +1021,7 @@
             
             if (hasError) {
                 statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-                statusDiv.textContent = '❌ Please fill in all fields (including Admin) in all rows!';
+                statusDiv.textContent = '❌ Please fill in all fields (including Admin and Billed Hours) in all rows!';
                 statusDiv.classList.remove('hidden');
                 return;
             }
@@ -1024,10 +1054,11 @@
                 const planned = row.querySelector('.row-planned').value;
                 const clockify = row.querySelector('.row-clockify').value;
                 const effective = row.querySelector('.row-effective').value;
+                const billed = row.querySelector('.row-billed').value;
                 const type = row.querySelector('.row-type').value;
                 const user = row.querySelector('.row-user').value;
                 
-                if (!date || !client || !project || !activity || !clockify || !effective || !type || !user) {
+                if (!date || !client || !project || !activity || !clockify || !effective || !billed || !type || !user) {
                     hasError = true;
                     row.classList.add('bg-red-50');
                 } else {
@@ -1037,6 +1068,7 @@
                         plannedHours: planned || '0',
                         clockifyHours: clockify,
                         effectiveHours: effective,
+                        billedHours: billed,
                         type, user
                     });
                 }
@@ -1044,7 +1076,7 @@
             
             if (hasError) {
                 statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-                statusDiv.textContent = '❌ Please fill in all required fields!';
+                statusDiv.textContent = '❌ Please fill in all required fields (including Billed Hours)!';
                 statusDiv.classList.remove('hidden');
                 return;
             }
@@ -1105,7 +1137,7 @@
                     html += `<div class="border-t pt-2 mt-2">
                         <p><strong>${item.date}</strong> - ${item.client} / ${item.project}</p>
                         <p class="text-gray-600">${item.activity}</p>
-                        <p class="text-gray-600">Planned: ${item.plannedHours}h | Clockify: ${item.clockifyHours}h | Effective: ${item.effectiveHours}h | ${item.type}</p>
+                        <p class="text-gray-600">Planned: ${item.plannedHours}h | Clockify: ${item.clockifyHours}h | Effective: ${item.effectiveHours}h | Billed: ${item.billedHours}h | ${item.type}</p>
                     </div>`;
                 });
                 
@@ -1210,7 +1242,7 @@
                     html += `<div class="border-t pt-2 mt-2">
                         <p><strong>${item.date}</strong> - ${item.client} / ${item.project}</p>
                         <p class="text-gray-600">${item.activity}</p>
-                        <p class="text-gray-600">Planned: ${item.plannedHours}h | Clockify: ${item.clockifyHours}h | Effective: ${item.effectiveHours}h | ${item.type}</p>
+                        <p class="text-gray-600">Planned: ${item.plannedHours}h | Clockify: ${item.clockifyHours}h | Effective: ${item.effectiveHours}h | Billed: ${item.billedHours}h | ${item.type}</p>
                     </div>`;
                 });
                 
@@ -1265,6 +1297,9 @@
                             </td>
                             <td class="border border-gray-300 p-2">
                                 <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" required value="${item.effectiveHours}" oninput="updateTotals()">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-billed w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" required value="${item.billedHours}" oninput="updateTotals()">
                             </td>
                             <td class="border border-gray-300 p-2">
                                 <select class="row-admin w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
