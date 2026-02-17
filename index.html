@@ -881,6 +881,11 @@
 
         // Load Saved Progress
         function loadSavedProgress() {
+            // Clear the table first
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+            rowCounter = 0;
+            
             const savedData = localStorage.getItem('savedTimesheet_' + currentUser);
             if (!savedData) {
                 addNewRow();
@@ -889,11 +894,10 @@
             
             try {
                 const rows = JSON.parse(savedData);
-                const tbody = document.getElementById('dataTableBody');
-                tbody.innerHTML = '';
-                rowCounter = 0;
+                let loadedCount = 0;
                 
                 rows.forEach((rowData) => {
+                    // Double-check that this row belongs to the current user
                     if (rowData.user === currentUser) {
                         const rowId = rowCounter++;
                         const row = document.createElement('tr');
@@ -953,16 +957,18 @@
                             </td>
                         `;
                         tbody.appendChild(row);
+                        loadedCount++;
                     }
                 });
                 
-                if (rowCounter > 0) {
+                if (loadedCount > 0) {
                     const statusDiv = document.getElementById('statusMessage');
                     statusDiv.className = 'mt-4 p-4 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
-                    statusDiv.textContent = `📂 Restored ${rowCounter} saved ${rowCounter === 1 ? 'entry' : 'entries'}`;
+                    statusDiv.textContent = `📂 Restored ${loadedCount} saved ${loadedCount === 1 ? 'entry' : 'entries'}`;
                     statusDiv.classList.remove('hidden');
                     setTimeout(() => statusDiv.classList.add('hidden'), 3000);
                 } else {
+                    // No saved data for this user, add a new row
                     addNewRow();
                 }
                 
