@@ -1,194 +1,239 @@
-// UI Update Module
+// API Communication Module
 
-// Update the client list display
-function updateClientList() {
-    const clientListDiv = document.getElementById('clientList');
+// Test connection to Google Apps Script
+async function testConnection() {
+    const btn = document.getElementById('testConnectionBtn');
+    const resultDiv = document.getElementById('testResult');
     
-    if (STATE.clientsList.length === 0) {
-        clientListDiv.innerHTML = '<span class="text-sm text-gray-500 italic">No clients added yet</span>';
-        return;
-    }
+    btn.disabled = true;
+    btn.textContent = 'Testing...';
+    resultDiv.classList.remove('hidden');
+    resultDiv.className = 'mt-3 p-3 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
+    resultDiv.innerHTML = '🔄 Testing connection...';
     
-    clientListDiv.innerHTML = STATE.clientsList.map(client => 
-        `<span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">${client}</span>`
-    ).join('');
-}
-
-// Update the project client select dropdown
-function updateProjectClientSelect() {
-    const select = document.getElementById('projectClientSelect');
-    select.innerHTML = '<option value="">Select Client...</option>';
-    
-    STATE.clientsList.forEach(client => {
-        const option = document.createElement('option');
-        option.value = client;
-        option.textContent = client;
-        select.appendChild(option);
-    });
-}
-
-// Update the project list display
-function updateProjectList() {
-    const projectListDiv = document.getElementById('projectList');
-    
-    if (Object.keys(STATE.projectsMap).length === 0) {
-        projectListDiv.innerHTML = '<span class="text-sm text-gray-500 italic">No projects added yet</span>';
-        return;
-    }
-    
-    let html = '';
-    for (let client in STATE.projectsMap) {
-        html += `<div class="bg-white p-3 rounded-lg border border-green-200">
-            <p class="font-semibold text-green-900 mb-2">${client}:</p>
-            <div class="flex flex-wrap gap-2">`;
+    try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + '?action=getClients';
+        console.log('Testing URL:', url);
         
-        STATE.projectsMap[client].forEach(project => {
-            html += `<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">${project}</span>`;
+        const response = await fetch(url);
+        const text = await response.text();
+        
+        if (!response.ok) {
+            resultDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+            resultDiv.innerHTML = `❌ <strong>HTTP Error ${response.status}</strong>`;
+            return;
+        }
+        
+        const result = JSON.parse(text);
+        
+        if (result.status === 'success') {
+            resultDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+            resultDiv.innerHTML = `✅ <strong>Connection Successful!</strong><br><span class="text-sm">Clients found: ${result.clients.length}</span>`;
+        } else {
+            resultDiv.className = 'mt-3 p-3 bg-orange-100 border border-orange-400 text-orange-800 rounded-lg';
+            resultDiv.innerHTML = `⚠️ <strong>Script Error:</strong> ${result.message}`;
+        }
+        
+    } catch (error) {
+        console.error('Connection test failed:', error);
+        resultDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+        resultDiv.innerHTML = `❌ <strong>Connection Failed: ${error.message}</strong>`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Test Connection';
+    }
+}
+
+// Load clients from Google Sheets
+async function loadClients() {
+    try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + '?action=getClients&t=' + Date.now();
+        const response = await fetch(url, { method: 'GET', redirect: 'follow', mode: 'cors' });
+        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const text = await response.text();
+        const result = JSON.parse(text);
+        
+        if (result.status === 'success') {
+            STATE.clientsList = result.clients || [];
+            updateClientList();
+            updateProjectClientSelect();
+        } else {
+            throw new Error(result.message || 'Unknown error');
+        }
+    } catch (error) {
+        console.error('Error loading clients:', error);
+        const clientListDiv = document.getElementById('clientList');
+        clientListDiv.innerHTML = `<span class="text-sm text-red-600">⚠️ Error: ${error.message}</span>`;
+    }
+}
+
+// Load projects from Google Sheets
+async function loadProjects() {
+    try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + '?action=getProjects&t=' + Date.now();
+        const response = await fetch(url, { method: 'GET', redirect: 'follow', mode: 'cors' });
+        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const text = await response.text();
+        const result = JSON.parse(text);
+        
+        if (result.status === 'success') {
+            STATE.projectsMap = result.projects || {};
+            updateProjectList();
+        } else {
+            throw new Error(result.message || 'Unknown error');
+        }
+    } catch (error) {
+        console.error('Error loading projects:', error);
+        const projectListDiv = document.getElementById('projectList');
+        projectListDiv.innerHTML = `<span class="text-sm text-red-600">⚠️ Error: ${error.message}</span>`;
+    }
+}
+
+// Load admins
+async function loadAdmins() {
+    try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + '?action=getAdmins&t=' + Date.now();
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            STATE.adminsList = result.admins || [];
+        }
+    } catch (error) {
+        console.error('Error loading admins:', error);
+    }
+}
+
+// Load pending approvals (for admins)
+async function loadPendingApprovals() {
+    try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + '?action=getPendingApprovals&approver=' + encodeURIComponent(STATE.currentUser) + '&t=' + Date.now();
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            displayPendingApprovals(result.approvals || []);
+        }
+    } catch (error) {
+        console.error('Error loading approvals:', error);
+        document.getElementById('approvalsList').innerHTML = `<span class="text-sm text-red-600">⚠️ Error loading approvals</span>`;
+    }
+}
+
+// Load rejected submissions (for data users)
+async function loadRejectedSubmissions() {
+    try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + '?action=getRejectedSubmissions&username=' + encodeURIComponent(STATE.currentUser) + '&t=' + Date.now();
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            displayRejectedSubmissions(result.rejected || []);
+        }
+    } catch (error) {
+        console.error('Error loading rejected submissions:', error);
+        document.getElementById('rejectedList').innerHTML = `<span class="text-sm text-red-600">⚠️ Error loading rejected submissions</span>`;
+    }
+}
+
+// Add a new client
+async function addClient(clientName) {
+    try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + '?action=addClient&clientName=' + encodeURIComponent(clientName);
+        const response = await fetch(url);
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        throw new Error('Error adding client: ' + error.message);
+    }
+}
+
+// Add a new project
+async function addProject(clientName, projectName) {
+    try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + '?action=addProject&clientName=' + encodeURIComponent(clientName) + '&projectName=' + encodeURIComponent(projectName);
+        const response = await fetch(url);
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        throw new Error('Error adding project: ' + error.message);
+    }
+}
+
+// Submit activities (admin direct or data for approval)
+async function submitActivities(activities) {
+    try {
+        const action = STATE.userRole === 'admin' ? 'submitActivities' : 'submitForApproval';
+        const payload = {
+            action: action,
+            activities: activities
+        };
+        
+        if (STATE.userRole !== 'admin') {
+            payload.submittedBy = STATE.currentUser;
+        }
+        
+        const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
         
-        html += `</div></div>`;
-    }
-    
-    projectListDiv.innerHTML = html;
-}
-
-// Add a new row to the data entry table
-function addNewRow() {
-    const tbody = document.getElementById('dataTableBody');
-    const rowId = STATE.rowCounter++;
-    
-    const row = document.createElement('tr');
-    row.className = 'hover:bg-gray-50';
-    row.id = `row-${rowId}`;
-    
-    const today = new Date().toISOString().split('T')[0];
-    
-    row.innerHTML = `
-        <td class="border border-gray-300 p-2">
-            <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${today}" required>
-        </td>
-        <td class="border border-gray-300 p-2">
-            <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
-                <option value="">Select Client...</option>
-                ${STATE.clientsList.map(client => `<option value="${client}">${client}</option>`).join('')}
-            </select>
-        </td>
-        <td class="border border-gray-300 p-2">
-            <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                <option value="">Select Client First...</option>
-            </select>
-        </td>
-        <td class="border border-gray-300 p-2">
-            <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="Activity description" required rows="2"></textarea>
-        </td>
-        <td class="border border-gray-300 p-2">
-            <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required>
-        </td>
-        <td class="border border-gray-300 p-2">
-            <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required>
-        </td>
-        <td class="border border-gray-300 p-2">
-            <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                <option value="">Select...</option>
-                <option value="Recurring">Recurring</option>
-                <option value="Adhoc">Adhoc</option>
-            </select>
-        </td>
-        <td class="border border-gray-300 p-2">
-            <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                <option value="${STATE.currentUser}" selected>${STATE.currentUser}</option>
-            </select>
-        </td>
-        <td class="border border-gray-300 p-2 text-center">
-            <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
-        </td>
-    `;
-    
-    tbody.appendChild(row);
-}
-
-// Update project dropdown when client is selected
-window.updateProjectDropdown = function(rowId) {
-    const row = document.getElementById(`row-${rowId}`);
-    const clientSelect = row.querySelector('.row-client');
-    const projectSelect = row.querySelector('.row-project');
-    
-    const selectedClient = clientSelect.value;
-    
-    if (!selectedClient) {
-        projectSelect.innerHTML = '<option value="">Select Client First...</option>';
-        return;
-    }
-    
-    const projects = STATE.projectsMap[selectedClient] || [];
-    
-    if (projects.length === 0) {
-        projectSelect.innerHTML = '<option value="">No projects for this client</option>';
-        return;
-    }
-    
-    projectSelect.innerHTML = '<option value="">Select Project...</option>' + 
-        projects.map(project => `<option value="${project}">${project}</option>`).join('');
-};
-
-// Delete a row from the table
-window.deleteRow = function(rowId) {
-    const row = document.getElementById(`row-${rowId}`);
-    if (row) {
-        row.remove();
-    }
-};
-
-// Show status message
-function showStatusMessage(message, type) {
-    const statusDiv = document.getElementById('statusMessage');
-    const className = type === 'success' 
-        ? 'mt-4 p-4 bg-green-100 border border-green-400 text-green-800 rounded-lg'
-        : 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-    
-    statusDiv.className = className;
-    statusDiv.textContent = message;
-    statusDiv.classList.remove('hidden');
-    
-    if (type === 'success') {
-        setTimeout(() => {
-            statusDiv.classList.add('hidden');
-        }, 3000);
+        return { status: 'success' };
+    } catch (error) {
+        throw new Error('Error submitting activities: ' + error.message);
     }
 }
 
-// Show client master status
-function showClientStatus(message, type) {
-    const statusDiv = document.getElementById('clientMasterStatus');
-    const className = type === 'success'
-        ? 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg'
-        : 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-    
-    statusDiv.className = className;
-    statusDiv.textContent = message;
-    statusDiv.classList.remove('hidden');
-    
-    if (type === 'success') {
-        setTimeout(() => {
-            statusDiv.classList.add('hidden');
-        }, 3000);
+// Approve submission
+async function approveSubmission(submissionId) {
+    try {
+        const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'approveSubmission',
+                submissionId: submissionId
+            })
+        });
+        return { status: 'success' };
+    } catch (error) {
+        throw new Error('Error approving: ' + error.message);
     }
 }
 
-// Show project master status
-function showProjectStatus(message, type) {
-    const statusDiv = document.getElementById('projectMasterStatus');
-    const className = type === 'success'
-        ? 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg'
-        : 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-    
-    statusDiv.className = className;
-    statusDiv.textContent = message;
-    statusDiv.classList.remove('hidden');
-    
-    if (type === 'success') {
-        setTimeout(() => {
-            statusDiv.classList.add('hidden');
-        }, 3000);
+// Reject submission
+async function rejectSubmission(submissionId) {
+    try {
+        const response = await fetch(CONFIG.GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'rejectSubmission',
+                submissionId: submissionId
+            })
+        });
+        return { status: 'success' };
+    } catch (error) {
+        throw new Error('Error rejecting: ' + error.message);
+    }
+}
+
+// Delete rejected submission
+async function deleteRejectedSubmission(submissionId) {
+    try {
+        const url = CONFIG.GOOGLE_SCRIPT_URL + '?action=deleteRejectedSubmission&submissionId=' + encodeURIComponent(submissionId);
+        const response = await fetch(url);
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        throw new Error('Error deleting: ' + error.message);
     }
 }
