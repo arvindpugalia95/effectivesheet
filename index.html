@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Client Activity Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="bg-gray-50 min-h-screen p-6">
     <!-- Login Page -->
@@ -34,10 +33,76 @@
         </div>
     </div>
 
+    <!-- Review Modal -->
+    <div id="reviewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
+                <h2 class="text-2xl font-bold">📋 Review Your Submission</h2>
+                <p class="text-blue-100 mt-1">Please review all entries before submitting</p>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 overflow-y-auto max-h-[60vh]">
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <p class="text-sm text-gray-600 mb-1">Total Entries</p>
+                        <p class="text-3xl font-bold text-blue-600" id="reviewTotalEntries">0</p>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                        <p class="text-sm text-gray-600 mb-1">Total Clockify Hours</p>
+                        <p class="text-3xl font-bold text-purple-600" id="reviewTotalClockify">0.00</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <p class="text-sm text-gray-600 mb-1">Total Effective Hours</p>
+                        <p class="text-3xl font-bold text-green-600">
+                            <span id="reviewTotalEffective">0.00</span>
+                            <span class="text-sm text-gray-500 ml-2">(<span id="reviewPercentage">0</span>%)</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Entries Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full border-collapse border border-gray-300">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">#</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Date</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Client</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Project</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Activity</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Planned</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Clockify</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Effective</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Type</th>
+                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold" id="adminColumnHeader">Admin</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reviewTableBody">
+                            <!-- Review entries will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-gray-50 px-6 py-4 flex justify-between items-center border-t">
+                <button id="cancelReviewBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-8 rounded-lg transition duration-200">
+                    ← Go Back & Edit
+                </button>
+                <button id="confirmSubmitBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-lg">
+                    ✓ Confirm & Submit
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Main App (Hidden until login) -->
     <div id="mainApp" class="max-w-7xl mx-auto hidden">
         <div class="bg-white rounded-lg shadow-md p-8">
-            <!-- Header -->
+            <!-- Header with User Info and Logout -->
             <div class="flex justify-between items-center mb-6 pb-4 border-b">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-800">Client Activity Tracker</h1>
@@ -46,14 +111,35 @@
                 <div class="text-right">
                     <p class="text-sm text-gray-600">Logged in as:</p>
                     <p class="font-semibold text-gray-800" id="loggedInUser"></p>
-                    <p class="text-xs text-gray-500" id="userRole"></p>
                     <button id="logoutBtn" class="mt-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
                         Logout
                     </button>
                 </div>
             </div>
+
+            <!-- Hours Summary Card -->
+            <div class="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-600 rounded-lg shadow-sm">
+                <h3 class="text-lg font-bold text-blue-900 mb-4">📊 Hours Summary</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-lg shadow-sm">
+                        <p class="text-sm text-gray-600 mb-1">Planned Hours</p>
+                        <p class="text-3xl font-bold text-blue-600" id="totalPlannedHours">0.00</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm">
+                        <p class="text-sm text-gray-600 mb-1">Clockify Hours</p>
+                        <p class="text-3xl font-bold text-purple-600" id="totalClockifyHours">0.00</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm">
+                        <p class="text-sm text-gray-600 mb-1">Effective Hours</p>
+                        <p class="text-3xl font-bold text-green-600">
+                            <span id="totalEffectiveHours">0.00</span>
+                            <span class="text-sm text-gray-500 ml-2">(<span id="effectivePercentage">0</span>%)</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
             
-            <!-- Test Connection -->
+            <!-- Test Connection Button -->
             <div class="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg">
                 <div class="flex items-center justify-between">
                     <div>
@@ -79,63 +165,65 @@
                             <th class="border border-gray-300 p-3 text-left font-semibold">Planned Hours</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Clockify Hours</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Effective Hours</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Billed Hours</th>
+                            <th class="border border-gray-300 p-3 text-left font-semibold">Admin</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">Recurring/Adhoc</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold" id="adminColumnHeader">Admin Assigned</th>
                             <th class="border border-gray-300 p-3 text-left font-semibold">User</th>
                             <th class="border border-gray-300 p-3 text-center font-semibold w-20">Action</th>
                         </tr>
                     </thead>
-                    <tbody id="dataTableBody"></tbody>
+                    <tbody id="dataTableBody">
+                        <!-- Rows will be added here dynamically -->
+                    </tbody>
                 </table>
             </div>
 
+            <!-- Add Row Button -->
             <button id="addRowBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 shadow-md mb-4">
                 <span class="text-xl mr-2">+</span> Add Row
             </button>
 
-            <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-8">
-                <span id="submitBtnText">Submit All Entries</span>
+            <!-- Save Progress Button -->
+            <button id="saveProgressBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-4 ml-4">
+                💾 Save Progress
             </button>
 
+            <!-- Submit Button (Admin - Direct Submit) -->
+            <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-8 ml-4 hidden">
+                Submit All Entries
+            </button>
+
+            <!-- Submit for Approval (Data User) -->
+            <button id="submitForApprovalBtn" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-8 ml-4 hidden">
+                📤 Submit for Approval
+            </button>
+
+            <!-- Status Message -->
             <div id="statusMessage" class="mt-4 mb-8 hidden"></div>
 
-            <!-- Admin Section -->
-            <div id="adminApprovalSection" class="hidden mb-8">
-                <hr class="my-8 border-t-2 border-gray-300">
-                <div class="bg-purple-50 border-l-4 border-purple-600 p-6 rounded-lg">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold text-purple-900">🔔 Pending Approvals</h2>
-                        <button id="refreshApprovalsBtn" class="bg-purple-500 hover:bg-purple-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
-                            🔄 Refresh
-                        </button>
-                    </div>
-                    <div id="approvalsList" class="space-y-4">
-                        <p class="text-sm text-gray-500 italic">Loading approvals...</p>
-                    </div>
-                </div>
+            <!-- Rejected Submissions (Data User Only) -->
+            <div id="rejectedSubmissionsSection" class="hidden mb-8 p-6 bg-red-50 border-l-4 border-red-600 rounded-lg">
+                <h2 class="text-xl font-bold text-red-900 mb-4">❌ Rejected Submissions</h2>
+                <p class="text-sm text-red-800 mb-4">These submissions were rejected by the admin. You can load them back, edit, and resubmit.</p>
+                <button id="refreshRejectedBtn" class="mb-4 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
+                    🔄 Refresh Rejected
+                </button>
+                <div id="rejectedList"></div>
             </div>
 
-            <!-- Rejected Section -->
-            <div id="rejectedSection" class="hidden mb-8">
-                <hr class="my-8 border-t-2 border-gray-300">
-                <div class="bg-red-50 border-l-4 border-red-600 p-6 rounded-lg">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold text-red-900">❌ Rejected Submissions</h2>
-                        <button id="refreshRejectedBtn" class="bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
-                            🔄 Refresh
-                        </button>
-                    </div>
-                    <div id="rejectedList" class="space-y-4">
-                        <p class="text-sm text-gray-500 italic">Loading rejected submissions...</p>
-                    </div>
-                </div>
+            <!-- Approval Dashboard (Admin Only) -->
+            <div id="approvalDashboard" class="hidden mb-8 p-6 bg-orange-50 border-l-4 border-orange-600 rounded-lg">
+                <h2 class="text-xl font-bold text-orange-900 mb-4">🔔 Pending Approvals</h2>
+                <button id="refreshApprovalsBtn" class="mb-4 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
+                    🔄 Refresh Approvals
+                </button>
+                <div id="approvalsList"></div>
             </div>
 
+            <!-- Divider -->
             <hr class="my-8 border-t-2 border-gray-300">
 
-            <!-- Client Master -->
-            <div class="bg-blue-50 border-l-4 border-blue-600 p-6 mb-6 rounded-lg">
+            <!-- Client Master Section (Admin Only) -->
+            <div id="clientMasterSection" class="bg-blue-50 border-l-4 border-blue-600 p-6 mb-6 rounded-lg hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-blue-900">📋 Client Master</h2>
                     <button id="refreshClientsBtn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
@@ -160,8 +248,8 @@
                 </div>
             </div>
 
-            <!-- Project Master -->
-            <div class="bg-green-50 border-l-4 border-green-600 p-6 mb-8 rounded-lg">
+            <!-- Project Master Section (Admin Only) -->
+            <div id="projectMasterSection" class="bg-green-50 border-l-4 border-green-600 p-6 mb-8 rounded-lg hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-green-900">🗂️ Project Master</h2>
                     <button id="refreshProjectsBtn" class="bg-green-500 hover:bg-green-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
@@ -194,10 +282,1158 @@
         </div>
     </div>
 
-    <script src="js/config.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/app.js"></script>
+    <script>
+        // IMPORTANT: Replace this URL with your Google Apps Script Web App URL
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzlKdHrNToeJrV9X6Z4bV_QC0rL9HzhW7i_QjFFEmM-Bmypbkf7aJrF1VWB0pM6TXo8/exec';
+
+        // Session Management
+        let currentUser = null;
+        let currentUserRole = null;
+
+        // Data storage
+        let clientsList = [];
+        let projectsMap = {};
+        let adminsList = [];
+        let rowCounter = 0;
+
+        // Review modal data
+        let pendingActivities = [];
+        let pendingSubmissionType = null; // 'admin' or 'approval'
+
+        // Function to calculate and update totals
+        function updateTotals() {
+            const tbody = document.getElementById('dataTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            
+            let totalPlanned = 0;
+            let totalClockify = 0;
+            let totalEffective = 0;
+            
+            rows.forEach((row) => {
+                const planned = parseFloat(row.querySelector('.row-planned')?.value || 0);
+                const clockify = parseFloat(row.querySelector('.row-clockify')?.value || 0);
+                const effective = parseFloat(row.querySelector('.row-effective')?.value || 0);
+                
+                totalPlanned += planned;
+                totalClockify += clockify;
+                totalEffective += effective;
+            });
+            
+            // Update display
+            document.getElementById('totalPlannedHours').textContent = totalPlanned.toFixed(2);
+            document.getElementById('totalClockifyHours').textContent = totalClockify.toFixed(2);
+            document.getElementById('totalEffectiveHours').textContent = totalEffective.toFixed(2);
+            
+            // Calculate percentage
+            const percentage = totalClockify > 0 ? ((totalEffective / totalClockify) * 100).toFixed(0) : 0;
+            document.getElementById('effectivePercentage').textContent = percentage;
+        }
+
+        // Function to show review modal
+        function showReviewModal(activities, submissionType) {
+            pendingActivities = activities;
+            pendingSubmissionType = submissionType;
+            
+            // Update summary
+            document.getElementById('reviewTotalEntries').textContent = activities.length;
+            
+            let totalClockify = 0;
+            let totalEffective = 0;
+            
+            activities.forEach(activity => {
+                totalClockify += parseFloat(activity.clockifyHours);
+                totalEffective += parseFloat(activity.effectiveHours);
+            });
+            
+            document.getElementById('reviewTotalClockify').textContent = totalClockify.toFixed(2);
+            document.getElementById('reviewTotalEffective').textContent = totalEffective.toFixed(2);
+            
+            const percentage = totalClockify > 0 ? ((totalEffective / totalClockify) * 100).toFixed(0) : 0;
+            document.getElementById('reviewPercentage').textContent = percentage;
+            
+            // Show/hide admin column based on submission type
+            const adminColumnHeader = document.getElementById('adminColumnHeader');
+            if (submissionType === 'approval') {
+                adminColumnHeader.classList.remove('hidden');
+            } else {
+                adminColumnHeader.classList.add('hidden');
+            }
+            
+            // Populate table
+            const tbody = document.getElementById('reviewTableBody');
+            tbody.innerHTML = '';
+            
+            activities.forEach((activity, index) => {
+                const row = document.createElement('tr');
+                row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                
+                let adminCell = '';
+                if (submissionType === 'approval') {
+                    adminCell = `<td class="border border-gray-300 p-2 text-sm">${activity.adminAssigned || '-'}</td>`;
+                }
+                
+                row.innerHTML = `
+                    <td class="border border-gray-300 p-2 text-sm font-semibold">${index + 1}</td>
+                    <td class="border border-gray-300 p-2 text-sm">${activity.date}</td>
+                    <td class="border border-gray-300 p-2 text-sm">${activity.clientName}</td>
+                    <td class="border border-gray-300 p-2 text-sm">${activity.project}</td>
+                    <td class="border border-gray-300 p-2 text-sm max-w-xs truncate" title="${activity.activity}">${activity.activity}</td>
+                    <td class="border border-gray-300 p-2 text-sm text-center">${activity.plannedHours}h</td>
+                    <td class="border border-gray-300 p-2 text-sm text-center font-semibold text-purple-600">${activity.clockifyHours}h</td>
+                    <td class="border border-gray-300 p-2 text-sm text-center font-semibold text-green-600">${activity.effectiveHours}h</td>
+                    <td class="border border-gray-300 p-2 text-sm">
+                        <span class="px-2 py-1 rounded text-xs ${activity.type === 'Recurring' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}">
+                            ${activity.type}
+                        </span>
+                    </td>
+                    ${adminCell}
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // Show modal
+            document.getElementById('reviewModal').classList.remove('hidden');
+        }
+
+        // Cancel review
+        document.getElementById('cancelReviewBtn').addEventListener('click', () => {
+            document.getElementById('reviewModal').classList.add('hidden');
+            pendingActivities = [];
+            pendingSubmissionType = null;
+        });
+
+        // Confirm submission
+        document.getElementById('confirmSubmitBtn').addEventListener('click', async () => {
+            const confirmBtn = document.getElementById('confirmSubmitBtn');
+            const cancelBtn = document.getElementById('cancelReviewBtn');
+            
+            confirmBtn.disabled = true;
+            cancelBtn.disabled = true;
+            confirmBtn.textContent = 'Submitting...';
+            
+            try {
+                let action, postData;
+                
+                if (pendingSubmissionType === 'approval') {
+                    action = 'submitForApproval';
+                    postData = {
+                        action: action,
+                        activities: pendingActivities,
+                        submittedBy: currentUser
+                    };
+                } else {
+                    action = 'submitActivities';
+                    postData = {
+                        action: action,
+                        activities: pendingActivities
+                    };
+                }
+                
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(postData)
+                });
+
+                // Close modal
+                document.getElementById('reviewModal').classList.add('hidden');
+                
+                // Show success message
+                const statusDiv = document.getElementById('statusMessage');
+                statusDiv.className = 'mt-4 p-4 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+                statusDiv.textContent = `✅ Successfully submitted ${pendingActivities.length} ${pendingActivities.length === 1 ? 'entry' : 'entries'}!`;
+                statusDiv.classList.remove('hidden');
+                
+                // Clear form
+                localStorage.removeItem('savedTimesheet_' + currentUser);
+                const tbody = document.getElementById('dataTableBody');
+                tbody.innerHTML = '';
+                rowCounter = 0;
+                addNewRow();
+                
+                setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+                
+            } catch (error) {
+                const statusDiv = document.getElementById('statusMessage');
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                statusDiv.classList.remove('hidden');
+            } finally {
+                confirmBtn.disabled = false;
+                cancelBtn.disabled = false;
+                confirmBtn.textContent = '✓ Confirm & Submit';
+                pendingActivities = [];
+                pendingSubmissionType = null;
+            }
+        });
+
+        // Check if user is already logged in
+        window.addEventListener('load', () => {
+            const savedUser = sessionStorage.getItem('loggedInUser');
+            const savedRole = sessionStorage.getItem('loggedInUserRole');
+            if (savedUser && savedRole) {
+                currentUser = savedUser;
+                currentUserRole = savedRole;
+                showMainApp();
+            }
+        });
+
+        // Login functionality
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            const errorDiv = document.getElementById('loginError');
+            const loginBtn = document.getElementById('loginBtn');
+            
+            if (!username || !password) {
+                errorDiv.textContent = '❌ Please enter both username and password';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Logging in...';
+            errorDiv.classList.add('hidden');
+            
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=login&username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password);
+                const response = await fetch(url);
+                const text = await response.text();
+                const result = JSON.parse(text);
+                
+                if (result.status === 'success') {
+                    currentUser = username;
+                    currentUserRole = result.role || 'data';
+                    sessionStorage.setItem('loggedInUser', username);
+                    sessionStorage.setItem('loggedInUserRole', currentUserRole);
+                    showMainApp();
+                } else {
+                    errorDiv.textContent = '❌ ' + (result.message || 'Invalid username or password');
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                errorDiv.textContent = '❌ Login error: ' + error.message;
+                errorDiv.classList.remove('hidden');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Login';
+            }
+        });
+
+        // Allow Enter key to login
+        document.getElementById('loginPassword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('loginBtn').click();
+            }
+        });
+
+        // Logout functionality
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            currentUser = null;
+            currentUserRole = null;
+            sessionStorage.removeItem('loggedInUser');
+            sessionStorage.removeItem('loggedInUserRole');
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+        });
+
+        function showMainApp() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('loggedInUser').textContent = currentUser + ' (' + (currentUserRole === 'admin' ? 'Admin' : 'Data User') + ')';
+            
+            // Load data for ALL users
+            loadClients();
+            loadProjects();
+            loadAdminsList();
+            
+            // Show/hide sections based on role
+            if (currentUserRole === 'admin') {
+                document.getElementById('submitBtn').classList.remove('hidden');
+                document.getElementById('submitForApprovalBtn').classList.add('hidden');
+                document.getElementById('clientMasterSection').classList.remove('hidden');
+                document.getElementById('projectMasterSection').classList.remove('hidden');
+                document.getElementById('approvalDashboard').classList.remove('hidden');
+                document.getElementById('rejectedSubmissionsSection').classList.add('hidden');
+                loadPendingApprovals();
+            } else {
+                document.getElementById('submitBtn').classList.add('hidden');
+                document.getElementById('submitForApprovalBtn').classList.remove('hidden');
+                document.getElementById('clientMasterSection').classList.add('hidden');
+                document.getElementById('projectMasterSection').classList.add('hidden');
+                document.getElementById('approvalDashboard').classList.add('hidden');
+                document.getElementById('rejectedSubmissionsSection').classList.remove('hidden');
+                loadRejectedSubmissions();
+            }
+            
+            loadSavedProgress();
+            updateTotals();
+        }
+
+        // Test Connection
+        document.getElementById('testConnectionBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('testConnectionBtn');
+            const resultDiv = document.getElementById('testResult');
+            
+            btn.disabled = true;
+            btn.textContent = 'Testing...';
+            resultDiv.classList.remove('hidden');
+            resultDiv.className = 'mt-3 p-3 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
+            resultDiv.innerHTML = '🔄 Testing connection...';
+            
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getClients';
+                const response = await fetch(url);
+                const text = await response.text();
+                
+                if (!response.ok) {
+                    resultDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                    resultDiv.innerHTML = `❌ <strong>HTTP Error ${response.status}</strong>`;
+                    return;
+                }
+                
+                const result = JSON.parse(text);
+                
+                if (result.status === 'success') {
+                    resultDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+                    resultDiv.innerHTML = `✅ <strong>Connection Successful!</strong>`;
+                } else {
+                    resultDiv.className = 'mt-3 p-3 bg-orange-100 border border-orange-400 text-orange-800 rounded-lg';
+                    resultDiv.innerHTML = `⚠️ <strong>Script Error:</strong> ${result.message}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                resultDiv.innerHTML = `❌ <strong>Connection Failed: ${error.message}</strong>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Test Connection';
+            }
+        });
+
+        // Load Clients
+        async function loadClients() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getClients&t=' + Date.now();
+                const response = await fetch(url);
+                const text = await response.text();
+                const result = JSON.parse(text);
+                
+                if (result.status === 'success') {
+                    clientsList = result.clients || [];
+                    updateClientList();
+                    updateProjectClientSelect();
+                }
+            } catch (error) {
+                console.error('Error loading clients:', error);
+            }
+        }
+
+        // Load Projects
+        async function loadProjects() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getProjects&t=' + Date.now();
+                const response = await fetch(url);
+                const text = await response.text();
+                const result = JSON.parse(text);
+                
+                if (result.status === 'success') {
+                    projectsMap = result.projects || {};
+                    updateProjectList();
+                }
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        }
+
+        // Load Admins List
+        async function loadAdminsList() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getAdmins';
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    adminsList = result.admins || [];
+                    updateAllAdminDropdowns();
+                }
+            } catch (error) {
+                console.error('Error loading admins:', error);
+            }
+        }
+
+        // Update all admin dropdowns in table rows
+        function updateAllAdminDropdowns() {
+            const adminSelects = document.querySelectorAll('.row-admin');
+            adminSelects.forEach(select => {
+                const currentValue = select.value;
+                select.innerHTML = '<option value="">Select Admin...</option>';
+                adminsList.forEach(admin => {
+                    const option = document.createElement('option');
+                    option.value = admin;
+                    option.textContent = admin;
+                    if (admin === currentValue) option.selected = true;
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        function updateClientList() {
+            const clientListDiv = document.getElementById('clientList');
+            if (clientsList.length === 0) {
+                clientListDiv.innerHTML = '<span class="text-sm text-gray-500 italic">No clients added yet</span>';
+                return;
+            }
+            clientListDiv.innerHTML = clientsList.map(client => 
+                `<span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">${client}</span>`
+            ).join('');
+        }
+
+        function updateProjectClientSelect() {
+            const select = document.getElementById('projectClientSelect');
+            select.innerHTML = '<option value="">Select Client...</option>';
+            clientsList.forEach(client => {
+                const option = document.createElement('option');
+                option.value = client;
+                option.textContent = client;
+                select.appendChild(option);
+            });
+        }
+
+        function updateProjectList() {
+            const projectListDiv = document.getElementById('projectList');
+            if (Object.keys(projectsMap).length === 0) {
+                projectListDiv.innerHTML = '<span class="text-sm text-gray-500 italic">No projects added yet</span>';
+                return;
+            }
+            
+            let html = '';
+            for (let client in projectsMap) {
+                html += `<div class="bg-white p-3 rounded-lg border border-green-200">
+                    <p class="font-semibold text-green-900 mb-2">${client}:</p>
+                    <div class="flex flex-wrap gap-2">`;
+                projectsMap[client].forEach(project => {
+                    html += `<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">${project}</span>`;
+                });
+                html += `</div></div>`;
+            }
+            projectListDiv.innerHTML = html;
+        }
+
+        // Add new row to table
+        function addNewRow() {
+            const tbody = document.getElementById('dataTableBody');
+            const rowId = rowCounter++;
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50';
+            row.id = `row-${rowId}`;
+            const today = new Date().toISOString().split('T')[0];
+            
+            row.innerHTML = `
+                <td class="border border-gray-300 p-2">
+                    <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${today}" required>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
+                        <option value="">Select Client...</option>
+                        ${clientsList.map(client => `<option value="${client}">${client}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                        <option value="">Select Client First...</option>
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="Activity description" required rows="2"></textarea>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" oninput="updateTotals()">
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="row-admin w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                        <option value="">Select Admin...</option>
+                        ${adminsList.map(admin => `<option value="${admin}">${admin}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                        <option value="">Select...</option>
+                        <option value="Recurring">Recurring</option>
+                        <option value="Adhoc">Adhoc</option>
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                        <option value="${currentUser}" selected>${currentUser}</option>
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2 text-center">
+                    <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+            updateTotals();
+        }
+
+        window.updateProjectDropdown = function(rowId) {
+            const row = document.getElementById(`row-${rowId}`);
+            const clientSelect = row.querySelector('.row-client');
+            const projectSelect = row.querySelector('.row-project');
+            const selectedClient = clientSelect.value;
+            
+            if (!selectedClient) {
+                projectSelect.innerHTML = '<option value="">Select Client First...</option>';
+                return;
+            }
+            
+            const projects = projectsMap[selectedClient] || [];
+            if (projects.length === 0) {
+                projectSelect.innerHTML = '<option value="">No projects for this client</option>';
+                return;
+            }
+            
+            projectSelect.innerHTML = '<option value="">Select Project...</option>' + 
+                projects.map(project => `<option value="${project}">${project}</option>`).join('');
+        };
+
+        window.deleteRow = function(rowId) {
+            const row = document.getElementById(`row-${rowId}`);
+            if (row) {
+                row.remove();
+                updateTotals();
+            }
+        };
+
+        document.getElementById('addRowBtn').addEventListener('click', addNewRow);
+
+        // Save Progress
+        document.getElementById('saveProgressBtn').addEventListener('click', () => {
+            const statusDiv = document.getElementById('statusMessage');
+            const tbody = document.getElementById('dataTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            
+            if (rows.length === 0) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ No entries to save!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            const savedData = [];
+            rows.forEach((row) => {
+                savedData.push({
+                    date: row.querySelector('.row-date').value,
+                    client: row.querySelector('.row-client').value,
+                    project: row.querySelector('.row-project').value,
+                    activity: row.querySelector('.row-activity').value,
+                    planned: row.querySelector('.row-planned').value,
+                    clockify: row.querySelector('.row-clockify').value,
+                    effective: row.querySelector('.row-effective').value,
+                    admin: row.querySelector('.row-admin').value,
+                    type: row.querySelector('.row-type').value,
+                    user: row.querySelector('.row-user').value
+                });
+            });
+
+            localStorage.setItem('savedTimesheet_' + currentUser, JSON.stringify(savedData));
+            
+            statusDiv.className = 'mt-4 p-4 bg-purple-100 border border-purple-400 text-purple-800 rounded-lg';
+            statusDiv.textContent = `💾 Progress saved! ${savedData.length} ${savedData.length === 1 ? 'entry' : 'entries'} saved locally.`;
+            statusDiv.classList.remove('hidden');
+            
+            setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+        });
+
+        // Load Saved Progress
+        function loadSavedProgress() {
+            const savedData = localStorage.getItem('savedTimesheet_' + currentUser);
+            if (!savedData) {
+                addNewRow();
+                return;
+            }
+            
+            try {
+                const rows = JSON.parse(savedData);
+                const tbody = document.getElementById('dataTableBody');
+                tbody.innerHTML = '';
+                rowCounter = 0;
+                
+                rows.forEach((rowData) => {
+                    if (rowData.user === currentUser) {
+                        const rowId = rowCounter++;
+                        const row = document.createElement('tr');
+                        row.className = 'hover:bg-gray-50';
+                        row.id = `row-${rowId}`;
+                        
+                        row.innerHTML = `
+                            <td class="border border-gray-300 p-2">
+                                <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${rowData.date}" required>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
+                                    <option value="">Select Client...</option>
+                                    ${clientsList.map(client => `<option value="${client}" ${client === rowData.client ? 'selected' : ''}>${client}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="${rowData.project}" selected>${rowData.project}</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" required rows="2">${rowData.activity}</textarea>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" value="${rowData.planned}" oninput="updateTotals()">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" required value="${rowData.clockify}" oninput="updateTotals()">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" required value="${rowData.effective}" oninput="updateTotals()">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-admin w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="">Select Admin...</option>
+                                    ${adminsList.map(admin => `<option value="${admin}" ${admin === rowData.admin ? 'selected' : ''}>${admin}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="">Select...</option>
+                                    <option value="Recurring" ${rowData.type === 'Recurring' ? 'selected' : ''}>Recurring</option>
+                                    <option value="Adhoc" ${rowData.type === 'Adhoc' ? 'selected' : ''}>Adhoc</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="${currentUser}" selected>${currentUser}</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2 text-center">
+                                <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    }
+                });
+                
+                if (rowCounter > 0) {
+                    const statusDiv = document.getElementById('statusMessage');
+                    statusDiv.className = 'mt-4 p-4 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
+                    statusDiv.textContent = `📂 Restored ${rowCounter} saved ${rowCounter === 1 ? 'entry' : 'entries'}`;
+                    statusDiv.classList.remove('hidden');
+                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+                } else {
+                    addNewRow();
+                }
+                
+                updateTotals();
+            } catch (e) {
+                console.error('Error loading saved progress:', e);
+                addNewRow();
+            }
+        }
+
+        // Submit for Approval (Data User) - NOW WITH REVIEW
+        document.getElementById('submitForApprovalBtn').addEventListener('click', async () => {
+            const statusDiv = document.getElementById('statusMessage');
+            const tbody = document.getElementById('dataTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            
+            if (rows.length === 0) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ No entries to submit!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            const activities = [];
+            let hasError = false;
+            
+            rows.forEach((row) => {
+                const date = row.querySelector('.row-date').value;
+                const client = row.querySelector('.row-client').value;
+                const project = row.querySelector('.row-project').value;
+                const activity = row.querySelector('.row-activity').value;
+                const planned = row.querySelector('.row-planned').value;
+                const clockify = row.querySelector('.row-clockify').value;
+                const effective = row.querySelector('.row-effective').value;
+                const admin = row.querySelector('.row-admin').value;
+                const type = row.querySelector('.row-type').value;
+                const user = row.querySelector('.row-user').value;
+                
+                if (!date || !client || !project || !activity || !clockify || !effective || !admin || !type || !user) {
+                    hasError = true;
+                    row.classList.add('bg-red-50');
+                } else {
+                    row.classList.remove('bg-red-50');
+                    activities.push({
+                        date, clientName: client, project, activity,
+                        plannedHours: planned || '0',
+                        clockifyHours: clockify,
+                        effectiveHours: effective,
+                        adminAssigned: admin,
+                        type, user
+                    });
+                }
+            });
+            
+            if (hasError) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Please fill in all fields (including Admin) in all rows!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Show review modal instead of submitting directly
+            showReviewModal(activities, 'approval');
+        });
+
+        // Submit All (Admin Direct) - NOW WITH REVIEW
+        document.getElementById('submitBtn').addEventListener('click', async () => {
+            const statusDiv = document.getElementById('statusMessage');
+            const tbody = document.getElementById('dataTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            
+            if (rows.length === 0) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ No entries to submit!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            const activities = [];
+            let hasError = false;
+            
+            rows.forEach((row) => {
+                const date = row.querySelector('.row-date').value;
+                const client = row.querySelector('.row-client').value;
+                const project = row.querySelector('.row-project').value;
+                const activity = row.querySelector('.row-activity').value;
+                const planned = row.querySelector('.row-planned').value;
+                const clockify = row.querySelector('.row-clockify').value;
+                const effective = row.querySelector('.row-effective').value;
+                const type = row.querySelector('.row-type').value;
+                const user = row.querySelector('.row-user').value;
+                
+                if (!date || !client || !project || !activity || !clockify || !effective || !type || !user) {
+                    hasError = true;
+                    row.classList.add('bg-red-50');
+                } else {
+                    row.classList.remove('bg-red-50');
+                    activities.push({
+                        date, clientName: client, project, activity,
+                        plannedHours: planned || '0',
+                        clockifyHours: clockify,
+                        effectiveHours: effective,
+                        type, user
+                    });
+                }
+            });
+            
+            if (hasError) {
+                statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Please fill in all required fields!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Show review modal instead of submitting directly
+            showReviewModal(activities, 'admin');
+        });
+
+        // Load Pending Approvals (Admin)
+        async function loadPendingApprovals() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getPendingApprovals&approver=' + encodeURIComponent(currentUser);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    displayApprovals(result.approvals);
+                }
+            } catch (error) {
+                console.error('Error loading approvals:', error);
+            }
+        }
+
+        function displayApprovals(approvals) {
+            const listDiv = document.getElementById('approvalsList');
+            
+            if (approvals.length === 0) {
+                listDiv.innerHTML = '<p class="text-sm text-gray-600 italic">No pending approvals</p>';
+                return;
+            }
+            
+            const grouped = {};
+            approvals.forEach(approval => {
+                if (!grouped[approval.submissionId]) grouped[approval.submissionId] = [];
+                grouped[approval.submissionId].push(approval);
+            });
+            
+            let html = '';
+            for (let submissionId in grouped) {
+                const items = grouped[submissionId];
+                const firstItem = items[0];
+                
+                html += `<div class="bg-white p-4 mb-4 rounded-lg border border-orange-300 shadow-sm">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <p class="font-semibold text-gray-800">From: ${firstItem.submittedBy}</p>
+                            <p class="text-sm text-gray-600">Submitted: ${firstItem.submittedAt}</p>
+                            <p class="text-sm text-gray-600">${items.length} ${items.length === 1 ? 'entry' : 'entries'}</p>
+                        </div>
+                        <div>
+                            <button onclick="approveSubmission('${submissionId}')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded mr-2">✓ Approve</button>
+                            <button onclick="rejectSubmission('${submissionId}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">✗ Reject</button>
+                        </div>
+                    </div>
+                    <div class="text-sm">`;
+                
+                items.forEach(item => {
+                    html += `<div class="border-t pt-2 mt-2">
+                        <p><strong>${item.date}</strong> - ${item.client} / ${item.project}</p>
+                        <p class="text-gray-600">${item.activity}</p>
+                        <p class="text-gray-600">Planned: ${item.plannedHours}h | Clockify: ${item.clockifyHours}h | Effective: ${item.effectiveHours}h | ${item.type}</p>
+                    </div>`;
+                });
+                
+                html += `</div></div>`;
+            }
+            listDiv.innerHTML = html;
+        }
+
+        window.approveSubmission = async function(submissionId) {
+            if (!confirm('Approve this submission?')) return;
+            
+            try {
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'approveSubmission',
+                        submissionId: submissionId,
+                        approvedBy: currentUser
+                    })
+                });
+                alert('Submission approved!');
+                loadPendingApprovals();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        };
+
+        window.rejectSubmission = async function(submissionId) {
+            if (!confirm('Reject this submission?')) return;
+            
+            try {
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'rejectSubmission',
+                        submissionId: submissionId
+                    })
+                });
+                alert('Submission rejected!');
+                loadPendingApprovals();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        };
+
+        document.getElementById('refreshApprovalsBtn').addEventListener('click', () => {
+            loadPendingApprovals();
+        });
+
+        // Load Rejected Submissions (Data User)
+        async function loadRejectedSubmissions() {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getRejectedSubmissions&username=' + encodeURIComponent(currentUser);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    displayRejectedSubmissions(result.rejected);
+                }
+            } catch (error) {
+                console.error('Error loading rejected:', error);
+            }
+        }
+
+        function displayRejectedSubmissions(rejected) {
+            const listDiv = document.getElementById('rejectedList');
+            
+            if (rejected.length === 0) {
+                listDiv.innerHTML = '<p class="text-sm text-gray-600 italic">No rejected submissions</p>';
+                return;
+            }
+            
+            const grouped = {};
+            rejected.forEach(item => {
+                if (!grouped[item.submissionId]) grouped[item.submissionId] = [];
+                grouped[item.submissionId].push(item);
+            });
+            
+            let html = '';
+            for (let submissionId in grouped) {
+                const items = grouped[submissionId];
+                const firstItem = items[0];
+                
+                html += `<div class="bg-white p-4 mb-4 rounded-lg border border-red-300 shadow-sm">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <p class="font-semibold text-gray-800">Rejected by: ${firstItem.approver}</p>
+                            <p class="text-sm text-gray-600">${items.length} ${items.length === 1 ? 'entry' : 'entries'}</p>
+                        </div>
+                        <div>
+                            <button onclick="loadRejectedToForm('${submissionId}')" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mr-2">📝 Load & Edit</button>
+                            <button onclick="deleteRejectedSubmission('${submissionId}')" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">🗑️ Delete</button>
+                        </div>
+                    </div>
+                    <div class="text-sm">`;
+                
+                items.forEach(item => {
+                    html += `<div class="border-t pt-2 mt-2">
+                        <p><strong>${item.date}</strong> - ${item.client} / ${item.project}</p>
+                        <p class="text-gray-600">${item.activity}</p>
+                        <p class="text-gray-600">Planned: ${item.plannedHours}h | Clockify: ${item.clockifyHours}h | Effective: ${item.effectiveHours}h | ${item.type}</p>
+                    </div>`;
+                });
+                
+                html += `</div></div>`;
+            }
+            listDiv.innerHTML = html;
+        }
+
+        window.loadRejectedToForm = async function(submissionId) {
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=getRejectedSubmissions&username=' + encodeURIComponent(currentUser);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    const items = result.rejected.filter(item => item.submissionId === submissionId);
+                    if (items.length === 0) return;
+                    
+                    const tbody = document.getElementById('dataTableBody');
+                    tbody.innerHTML = '';
+                    rowCounter = 0;
+                    
+                    items.forEach(item => {
+                        const rowId = rowCounter++;
+                        const row = document.createElement('tr');
+                        row.className = 'hover:bg-gray-50 bg-yellow-50';
+                        row.id = `row-${rowId}`;
+                        
+                        row.innerHTML = `
+                            <td class="border border-gray-300 p-2">
+                                <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${item.date}" required>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
+                                    <option value="">Select Client...</option>
+                                    ${clientsList.map(client => `<option value="${client}" ${client === item.client ? 'selected' : ''}>${client}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="${item.project}" selected>${item.project}</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" required rows="2">${item.activity}</textarea>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" value="${item.plannedHours}" oninput="updateTotals()">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" required value="${item.clockifyHours}" oninput="updateTotals()">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" required value="${item.effectiveHours}" oninput="updateTotals()">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-admin w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="">Select Admin...</option>
+                                    ${adminsList.map(admin => `<option value="${admin}" ${admin === item.approver ? 'selected' : ''}>${admin}</option>`).join('')}
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="">Select...</option>
+                                    <option value="Recurring" ${item.type === 'Recurring' ? 'selected' : ''}>Recurring</option>
+                                    <option value="Adhoc" ${item.type === 'Adhoc' ? 'selected' : ''}>Adhoc</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
+                                    <option value="${currentUser}" selected>${currentUser}</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2 text-center">
+                                <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
+                            </td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                    
+                    await fetch(GOOGLE_SCRIPT_URL + '?action=deleteRejectedSubmission&submissionId=' + encodeURIComponent(submissionId));
+                    loadRejectedSubmissions();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    updateTotals();
+                    
+                    const statusDiv = document.getElementById('statusMessage');
+                    statusDiv.className = 'mt-4 p-4 bg-blue-100 border border-blue-400 text-blue-800 rounded-lg';
+                    statusDiv.textContent = `📝 Loaded ${items.length} rejected ${items.length === 1 ? 'entry' : 'entries'} for editing!`;
+                    statusDiv.classList.remove('hidden');
+                    setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        };
+
+        window.deleteRejectedSubmission = async function(submissionId) {
+            if (!confirm('Permanently delete this rejected submission?')) return;
+            
+            try {
+                await fetch(GOOGLE_SCRIPT_URL + '?action=deleteRejectedSubmission&submissionId=' + encodeURIComponent(submissionId));
+                alert('Deleted!');
+                loadRejectedSubmissions();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        };
+
+        document.getElementById('refreshRejectedBtn').addEventListener('click', () => {
+            loadRejectedSubmissions();
+        });
+
+        // Refresh buttons
+        document.getElementById('refreshClientsBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('refreshClientsBtn');
+            btn.disabled = true;
+            btn.textContent = 'Loading...';
+            await loadClients();
+            btn.disabled = false;
+            btn.textContent = '🔄 Refresh';
+        });
+
+        document.getElementById('refreshProjectsBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('refreshProjectsBtn');
+            btn.disabled = true;
+            btn.textContent = 'Loading...';
+            await loadProjects();
+            btn.disabled = false;
+            btn.textContent = '🔄 Refresh';
+        });
+
+        // Add Client
+        document.getElementById('addClientBtn').addEventListener('click', async () => {
+            const newClientName = document.getElementById('newClientName').value.trim();
+            const statusDiv = document.getElementById('clientMasterStatus');
+            const addBtn = document.getElementById('addClientBtn');
+            
+            if (!newClientName) {
+                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Please enter a client name!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            addBtn.disabled = true;
+            addBtn.textContent = 'Adding...';
+            
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=addClient&clientName=' + encodeURIComponent(newClientName);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    statusDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+                    statusDiv.textContent = '✅ Client added successfully!';
+                    statusDiv.classList.remove('hidden');
+                    
+                    clientsList = result.clients || [...clientsList, newClientName];
+                    updateClientList();
+                    updateProjectClientSelect();
+                    document.getElementById('newClientName').value = '';
+                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+                } else {
+                    statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                    statusDiv.textContent = '❌ ' + result.message;
+                    statusDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                statusDiv.classList.remove('hidden');
+            } finally {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Client';
+            }
+        });
+
+        // Add Project
+        document.getElementById('addProjectBtn').addEventListener('click', async () => {
+            const clientName = document.getElementById('projectClientSelect').value;
+            const projectName = document.getElementById('newProjectName').value.trim();
+            const statusDiv = document.getElementById('projectMasterStatus');
+            const addBtn = document.getElementById('addProjectBtn');
+            
+            if (!clientName || !projectName) {
+                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Please select a client and enter a project name!';
+                statusDiv.classList.remove('hidden');
+                return;
+            }
+
+            addBtn.disabled = true;
+            addBtn.textContent = 'Adding...';
+            
+            try {
+                const url = GOOGLE_SCRIPT_URL + '?action=addProject&clientName=' + encodeURIComponent(clientName) + '&projectName=' + encodeURIComponent(projectName);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    statusDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+                    statusDiv.textContent = '✅ Project added successfully!';
+                    statusDiv.classList.remove('hidden');
+                    
+                    projectsMap = result.projects || projectsMap;
+                    updateProjectList();
+                    document.getElementById('newProjectName').value = '';
+                    document.getElementById('projectClientSelect').value = '';
+                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+                } else {
+                    statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                    statusDiv.textContent = '❌ ' + result.message;
+                    statusDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                statusDiv.classList.remove('hidden');
+            } finally {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Project';
+            }
+        });
+    </script>
 </body>
 </html>
