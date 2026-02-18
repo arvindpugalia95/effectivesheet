@@ -354,6 +354,46 @@ function lockPlanFields(row, planId) {
     row.querySelector('.row-planned').title = '🔒 Locked - From approved plan';
 }
 
+// Helper function to format date for input field
+function formatDateForInput(dateString) {
+    try {
+        // Handle different date formats from Google Sheets
+        let date;
+        
+        // If it's already in YYYY-MM-DD format, return it
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            return dateString;
+        }
+        
+        // Try to parse the date
+        date = new Date(dateString);
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+            // Try alternative parsing for formats like "12/25/2024" or "25/12/2024"
+            const parts = dateString.split('/');
+            if (parts.length === 3) {
+                // Assume MM/DD/YYYY format first
+                date = new Date(parts[2], parts[0] - 1, parts[1]);
+                
+                // If that creates an invalid date, try DD/MM/YYYY
+                if (isNaN(date.getTime())) {
+                    date = new Date(parts[2], parts[1] - 1, parts[0]);
+                }
+            }
+        }
+        
+        // Return in YYYY-MM-DD format
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}`;
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return new Date().toISOString().split('T')[0]; // Return today's date as fallback
+    }
+}
 // Load approved plans for current user
 async function loadApprovedPlans() {
     try {
@@ -372,8 +412,8 @@ async function loadApprovedPlans() {
                 
                 row.innerHTML = `
                     <td class="border border-gray-300 p-2">
-                        <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" value="${plan.date}" required>
-                    </td>
+    <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" value="${formatDateForInput(plan.date)}" required>
+</td>
                     <td class="border border-gray-300 p-2">
                         <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" required onchange="updateProjectDropdown(${rowId})">
                             <option value="${plan.client}" selected>${plan.client}</option>
