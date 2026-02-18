@@ -207,6 +207,11 @@
                 📤 Submit for Approval
             </button>
 
+            <!-- Submit Plan Button (Both Users) -->
+        <button id="submitPlanBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md mb-8 ml-4 hidden">
+                📅 Submit Plan
+            </button>
+
             <!-- Status Message -->
             <div id="statusMessage" class="mt-4 mb-8 hidden"></div>
 
@@ -228,6 +233,17 @@
                 </button>
                 <div id="approvalsList"></div>
             </div>
+
+
+           
+            <!-- Plan Approval Dashboard (Admin Only) -->
+<div id="planApprovalDashboard" class="hidden mb-8 p-6 bg-purple-50 border-l-4 border-purple-600 rounded-lg">
+    <h2 class="text-xl font-bold text-purple-900 mb-4">📅 Pending Plan Approvals</h2>
+    <button id="refreshPlanApprovalsBtn" class="mb-4 bg-purple-500 hover:bg-purple-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
+        🔄 Refresh Plan Approvals
+    </button>
+    <div id="planApprovalsList"></div>
+</div>
 
             <!-- Divider -->
             <hr class="my-8 border-t-2 border-gray-300">
@@ -310,6 +326,170 @@
         let pendingActivities = [];
         let pendingSubmissionType = null; // 'admin' or 'approval'
 
+        // Track approved plan IDs for locking
+let approvedPlanRows = new Set();
+
+
+// Lock plan fields for approved plans
+function lockPlanFields(row, planId) {
+    row.style.backgroundColor = '#f3e5f5'; // Light purple background
+    row.dataset.planId = planId;
+    row.dataset.isLocked = 'true';
+    
+    // Lock these fields
+    row.querySelector('.row-date').disabled = true;
+    row.querySelector('.row-client').disabled = true;
+    row.querySelector('.row-project').disabled = true;
+    row.querySelector('.row-activity').readOnly = true;
+    row.querySelector('.row-planned').disabled = true;
+    row.querySelector('.row-admin').disabled = true;
+    row.querySelector('.row-type').disabled = true;
+    row.querySelector('.row-user').disabled = true;
+    
+    // Add lock icons to labels
+    row.querySelector('.row-date').title = '🔒 Locked - From approved plan';
+    row.querySelector('.row-client').title = '🔒 Locked - From approved plan';
+    row.querySelector('.row-project').title = '🔒 Locked - From approved plan';
+    row.querySelector('.row-activity').title = '🔒 Locked - From approved plan';
+    row.querySelector('.row-planned').title = '🔒 Locked - From approved plan';
+}
+
+// Load approved plans for current user
+async function loadApprovedPlans() {
+    try {
+        const url = GOOGLE_SCRIPT_URL + '?action=getMyApprovedPlans&username=' + encodeURIComponent(currentUser);
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.status === 'success' && result.plans.length > 0) {
+            const tbody = document.getElementById('dataTableBody');
+            
+            result.plans.forEach(plan => {
+                const rowId = rowCounter++;
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-purple-50';
+                row.id = `row-${rowId}`;
+                
+                row.innerHTML = `
+                    <td class="border border-gray-300 p-2">
+                        <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" value="${plan.date}" required>
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" required onchange="updateProjectDropdown(${rowId})">
+                            <option value="${plan.client}" selected>${plan.client}</option>
+                        </select>
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" required>
+                            <option value="${plan.project}" selected>${plan.project}</option>
+                        </select>
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px] bg-gray-100" required rows="2" readonly>${plan.activity}</textarea>
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" step="0.25" min="0" value="${plan.plannedHours}" disabled oninput="updateTotals()">
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <input type="number" class="row-billed w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <select class="row-admin w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" disabled required>
+                            <option value="${plan.admin}" selected>${plan.admin}</option>
+                        </select>
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" disabled required>
+                            <option value="Recurring" selected>Recurring</option>
+                        </select>
+                    </td>
+                    <td class="border border-gray-300 p-2">
+                        <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" disabled required>
+                            <option value="${currentUser}" selected>${currentUser}</option>
+                        </select>
+                    </td>
+                    <td class="border border-gray-300 p-2 text-center">
+                        <button onclick="deleteRow(${rowId})" class="bg-gray-400 text-white px-3 py-1 rounded text-sm cursor-not-allowed" disabled>🔒 Locked</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+                lockPlanFields(row, plan.planId);
+                approvedPlanRows.add(rowId);
+            });
+            
+            updateTotals();
+            
+            // Show message
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = 'mt-4 p-4 bg-purple-100 border border-purple-400 text-purple-800 rounded-lg';
+            statusDiv.textContent = `📅 Loaded ${result.plans.length} approved plan(s). Fill in actual hours and submit.`;
+            statusDiv.classList.remove('hidden');
+            setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+        }
+    } catch (error) {
+        console.error('Error loading approved plans:', error);
+    }
+}
+
+// Check which submission mode we're in based on filled fields
+function checkSubmissionMode() {
+    const tbody = document.getElementById('dataTableBody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    if (rows.length === 0) {
+        // No rows, hide all submit buttons
+        document.getElementById('submitBtn').classList.add('hidden');
+        document.getElementById('submitForApprovalBtn').classList.add('hidden');
+        document.getElementById('submitPlanBtn').classList.add('hidden');
+        return;
+    }
+    
+    let hasEmptyHours = false;
+    let hasFilledHours = false;
+    
+    rows.forEach(row => {
+        const clockify = row.querySelector('.row-clockify')?.value || '';
+        const effective = row.querySelector('.row-effective')?.value || '';
+        const billed = row.querySelector('.row-billed')?.value || '';
+        
+        if (clockify === '' && effective === '' && billed === '') {
+            hasEmptyHours = true;
+        } else {
+            hasFilledHours = true;
+        }
+    });
+    
+    // Show appropriate buttons
+    if (currentUserRole === 'admin') {
+        if (hasEmptyHours && !hasFilledHours) {
+            // All rows have empty hours - show submit plan
+            document.getElementById('submitBtn').classList.add('hidden');
+            document.getElementById('submitPlanBtn').classList.remove('hidden');
+        } else if (hasFilledHours) {
+            // Some/all rows have hours - show submit all
+            document.getElementById('submitBtn').classList.remove('hidden');
+            document.getElementById('submitPlanBtn').classList.add('hidden');
+        }
+    } else {
+        // Data user
+        if (hasEmptyHours && !hasFilledHours) {
+            // All rows have empty hours - show submit plan
+            document.getElementById('submitForApprovalBtn').classList.add('hidden');
+            document.getElementById('submitPlanBtn').classList.remove('hidden');
+        } else if (hasFilledHours) {
+            // Some/all rows have hours - show submit for approval
+            document.getElementById('submitForApprovalBtn').classList.remove('hidden');
+            document.getElementById('submitPlanBtn').classList.add('hidden');
+        }
+    }
+}
+
         // Function to calculate and update totals
         function updateTotals() {
             const tbody = document.getElementById('dataTableBody');
@@ -341,6 +521,9 @@
             // Calculate percentage
             const percentage = totalClockify > 0 ? ((totalEffective / totalClockify) * 100).toFixed(0) : 0;
             document.getElementById('effectivePercentage').textContent = percentage;
+
+            // Check submission mode after updating totals
+checkSubmissionMode();
         }
 
         // Function to show review modal
@@ -571,27 +754,33 @@
                 loadAdminsList()
             ]);
             
-            // Show/hide sections based on role
-            if (currentUserRole === 'admin') {
-                document.getElementById('submitBtn').classList.remove('hidden');
-                document.getElementById('submitForApprovalBtn').classList.add('hidden');
-                document.getElementById('clientMasterSection').classList.remove('hidden');
-                document.getElementById('projectMasterSection').classList.remove('hidden');
-                document.getElementById('approvalDashboard').classList.remove('hidden');
-                document.getElementById('rejectedSubmissionsSection').classList.add('hidden');
-                loadPendingApprovals();
-            } else {
-                document.getElementById('submitBtn').classList.add('hidden');
-                document.getElementById('submitForApprovalBtn').classList.remove('hidden');
-                document.getElementById('clientMasterSection').classList.add('hidden');
-                document.getElementById('projectMasterSection').classList.add('hidden');
-                document.getElementById('approvalDashboard').classList.add('hidden');
-                document.getElementById('rejectedSubmissionsSection').classList.remove('hidden');
-                loadRejectedSubmissions();
-            }
+           // Show/hide sections based on role
+if (currentUserRole === 'admin') {
+    document.getElementById('submitBtn').classList.remove('hidden');
+    document.getElementById('submitForApprovalBtn').classList.add('hidden');
+    document.getElementById('submitPlanBtn').classList.add('hidden');
+    document.getElementById('clientMasterSection').classList.remove('hidden');
+    document.getElementById('projectMasterSection').classList.remove('hidden');
+    document.getElementById('approvalDashboard').classList.remove('hidden');
+    document.getElementById('planApprovalDashboard').classList.remove('hidden');
+    document.getElementById('rejectedSubmissionsSection').classList.add('hidden');
+    loadPendingApprovals();
+    loadPendingPlanApprovals();
+} else {
+    document.getElementById('submitBtn').classList.add('hidden');
+    document.getElementById('submitForApprovalBtn').classList.add('hidden');
+    document.getElementById('submitPlanBtn').classList.add('hidden');
+    document.getElementById('clientMasterSection').classList.add('hidden');
+    document.getElementById('projectMasterSection').classList.add('hidden');
+    document.getElementById('approvalDashboard').classList.add('hidden');
+    document.getElementById('planApprovalDashboard').classList.add('hidden');
+    document.getElementById('rejectedSubmissionsSection').classList.remove('hidden');
+    loadRejectedSubmissions();
+}
             
             // Load saved progress AFTER data is loaded
             loadSavedProgress();
+            loadApprovedPlans();  // <-- ADD THIS LINE
             updateTotals();
         }
 
@@ -807,6 +996,7 @@
             `;
             tbody.appendChild(row);
             updateTotals();
+            checkSubmissionMode();  // <-- ADD THIS LINE
         }
 
         window.updateProjectDropdown = function(rowId) {
@@ -831,12 +1021,19 @@
         };
 
         window.deleteRow = function(rowId) {
-            const row = document.getElementById(`row-${rowId}`);
-            if (row) {
-                row.remove();
-                updateTotals();
-            }
-        };
+    const row = document.getElementById(`row-${rowId}`);
+    if (row) {
+        // Check if it's a locked row
+        if (row.dataset.isLocked === 'true') {
+            alert('Cannot delete a locked plan row!');
+            return;
+        }
+        row.remove();
+        approvedPlanRows.delete(rowId);
+        updateTotals();
+        checkSubmissionMode();
+    }
+};
 
         document.getElementById('addRowBtn').addEventListener('click', addNewRow);
 
@@ -1090,6 +1287,237 @@
             // Show review modal instead of submitting directly
             showReviewModal(activities, 'admin');
         });
+
+
+
+        // Submit Plan Button
+document.getElementById('submitPlanBtn').addEventListener('click', async () => {
+    const statusDiv = document.getElementById('statusMessage');
+    const tbody = document.getElementById('dataTableBody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    if (rows.length === 0) {
+        statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+        statusDiv.textContent = '❌ No entries to submit!';
+        statusDiv.classList.remove('hidden');
+        return;
+    }
+
+    const activities = [];
+    let hasError = false;
+    
+    rows.forEach((row) => {
+        // Skip locked rows
+        if (row.dataset.isLocked === 'true') return;
+        
+        const date = row.querySelector('.row-date').value;
+        const client = row.querySelector('.row-client').value;
+        const project = row.querySelector('.row-project').value;
+        const activity = row.querySelector('.row-activity').value;
+        const planned = row.querySelector('.row-planned').value;
+        const clockify = row.querySelector('.row-clockify').value;
+        const effective = row.querySelector('.row-effective').value;
+        const billed = row.querySelector('.row-billed').value;
+        const admin = row.querySelector('.row-admin').value;
+        const type = row.querySelector('.row-type').value;
+        const user = row.querySelector('.row-user').value;
+        
+        // For plan submission, hours should be EMPTY
+        if (clockify !== '' || effective !== '' || billed !== '') {
+            statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+            statusDiv.textContent = '❌ Plan submission should not include actual hours. Leave Clockify, Effective, and Billed hours empty.';
+            statusDiv.classList.remove('hidden');
+            hasError = true;
+            return;
+        }
+        
+        // Validate plan fields
+        if (!date || !client || !project || !activity || !planned || !admin || !type || !user) {
+            hasError = true;
+            row.classList.add('bg-red-50');
+        } else {
+            row.classList.remove('bg-red-50');
+            activities.push({
+                date, 
+                clientName: client, 
+                project, 
+                activity,
+                plannedHours: planned,
+                adminAssigned: admin,
+                type, 
+                user
+            });
+        }
+    });
+    
+    if (hasError) {
+        if (!statusDiv.textContent.includes('should not include')) {
+            statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+            statusDiv.textContent = '❌ Please fill in all plan fields (Date, Client, Project, Activity, Planned Hours, Admin, Type)!';
+            statusDiv.classList.remove('hidden');
+        }
+        return;
+    }
+
+    const submitBtn = document.getElementById('submitPlanBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting Plan...';
+    
+    try {
+        await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'submitPlan',
+                activities: activities,
+                submittedBy: currentUser,
+                isAdmin: currentUserRole === 'admin'
+            })
+        });
+
+        statusDiv.className = 'mt-4 p-4 bg-green-100 border border-green-400 text-green-800 rounded-lg';
+        statusDiv.textContent = currentUserRole === 'admin' 
+            ? `✅ Plan submitted and approved! ${activities.length} ${activities.length === 1 ? 'entry' : 'entries'} saved.`
+            : `✅ Plan submitted for approval! ${activities.length} ${activities.length === 1 ? 'entry' : 'entries'} sent to admin.`;
+        statusDiv.classList.remove('hidden');
+        
+        // Clear form or reload approved plans
+        localStorage.removeItem('savedTimesheet_' + currentUser);
+        
+        if (currentUserRole === 'admin') {
+            // For admin, reload the page to show locked plans
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            // For data users, clear and show message
+            const tbody = document.getElementById('dataTableBody');
+            tbody.innerHTML = '';
+            rowCounter = 0;
+            addNewRow();
+            
+            statusDiv.textContent += ' You will be notified when your plan is approved.';
+        }
+        
+        setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+        
+    } catch (error) {
+        statusDiv.className = 'mt-4 p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg';
+        statusDiv.textContent = '❌ Error: ' + error.message;
+        statusDiv.classList.remove('hidden');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '📅 Submit Plan';
+    }
+});
+
+
+// Load Pending Plan Approvals (Admin)
+async function loadPendingPlanApprovals() {
+    try {
+        const url = GOOGLE_SCRIPT_URL + '?action=getPendingPlanApprovals&approver=' + encodeURIComponent(currentUser);
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            displayPlanApprovals(result.approvals);
+        }
+    } catch (error) {
+        console.error('Error loading plan approvals:', error);
+    }
+}
+
+function displayPlanApprovals(approvals) {
+    const listDiv = document.getElementById('planApprovalsList');
+    
+    if (approvals.length === 0) {
+        listDiv.innerHTML = '<p class="text-sm text-gray-600 italic">No pending plan approvals</p>';
+        return;
+    }
+    
+    const grouped = {};
+    approvals.forEach(approval => {
+        if (!grouped[approval.planId]) grouped[approval.planId] = [];
+        grouped[approval.planId].push(approval);
+    });
+    
+    let html = '';
+    for (let planId in grouped) {
+        const items = grouped[planId];
+        const firstItem = items[0];
+        
+        html += `<div class="bg-white p-4 mb-4 rounded-lg border border-purple-300 shadow-sm">
+            <div class="flex justify-between items-start mb-3">
+                <div>
+                    <p class="font-semibold text-gray-800">From: ${firstItem.submittedBy}</p>
+                    <p class="text-sm text-gray-600">Submitted: ${firstItem.submittedAt}</p>
+                    <p class="text-sm text-gray-600">${items.length} planned ${items.length === 1 ? 'activity' : 'activities'}</p>
+                </div>
+                <div>
+                    <button onclick="approvePlan('${planId}')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded mr-2">✓ Approve Plan</button>
+                    <button onclick="rejectPlan('${planId}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">✗ Reject Plan</button>
+                </div>
+            </div>
+            <div class="text-sm">`;
+        
+        items.forEach(item => {
+            html += `<div class="border-t pt-2 mt-2">
+                <p><strong>${item.date}</strong> - ${item.client} / ${item.project}</p>
+                <p class="text-gray-600">${item.activity}</p>
+                <p class="text-gray-600">Planned: ${item.plannedHours}h | ${item.type}</p>
+            </div>`;
+        });
+        
+        html += `</div></div>`;
+    }
+    listDiv.innerHTML = html;
+}
+
+window.approvePlan = async function(planId) {
+    if (!confirm('Approve this plan?')) return;
+    
+    try {
+        await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'approvePlan',
+                planId: planId
+            })
+        });
+        alert('Plan approved! User can now fill in actual hours.');
+        loadPendingPlanApprovals();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
+
+window.rejectPlan = async function(planId) {
+    if (!confirm('Reject and delete this plan?')) return;
+    
+    try {
+        await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'rejectPlan',
+                planId: planId
+            })
+        });
+        alert('Plan rejected and deleted!');
+        loadPendingPlanApprovals();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
+
+document.getElementById('refreshPlanApprovalsBtn').addEventListener('click', () => {
+    loadPendingPlanApprovals();
+});
+
 
         // Load Pending Approvals (Admin)
         async function loadPendingApprovals() {
