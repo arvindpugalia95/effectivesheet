@@ -655,20 +655,21 @@ checkSubmissionMode();
             try {
                 let action, postData;
                 
-                if (pendingSubmissionType === 'approval') {
-                    action = 'submitForApproval';
-                    postData = {
-                        action: action,
-                        activities: pendingActivities,
-                        submittedBy: currentUser
-                    };
-                } else {
-                    action = 'submitActivities';
-                    postData = {
-                        action: action,
-                        activities: pendingActivities
-                    };
-                }
+               if (pendingSubmissionType === 'approval') {
+    action = 'submitForApproval';
+    postData = {
+        action: action,
+        activities: pendingActivities,
+        submittedBy: currentUser
+    };
+} else {
+    action = 'submitActivities';
+    postData = {
+        action: action,
+        activities: pendingActivities,
+        submittedBy: currentUser  // <-- ADD THIS LINE
+    };
+}
                 
                 await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
