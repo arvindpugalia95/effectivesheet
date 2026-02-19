@@ -1495,9 +1495,10 @@ function displayPlanApprovals(approvals) {
                     <p class="text-sm text-gray-600">Submitted: ${firstItem.submittedAt}</p>
                     <p class="text-sm text-gray-600">${items.length} planned ${items.length === 1 ? 'activity' : 'activities'}</p>
                 </div>
-                <div>
-                    <button onclick="approvePlan('${planId}')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded mr-2">✓ Approve Plan</button>
-                    <button onclick="rejectPlan('${planId}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">✗ Reject Plan</button>
+                <div class="flex gap-2">
+                    <button onclick="openPlanEditModal('${planId}')" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">✏️ Edit & Approve</button>
+                    <button onclick="approvePlan('${planId}')" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">✓ Approve</button>
+                    <button onclick="rejectPlan('${planId}')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">✗ Reject</button>
                 </div>
             </div>
             <div class="text-sm">`;
@@ -1514,7 +1515,7 @@ function displayPlanApprovals(approvals) {
     }
     listDiv.innerHTML = html;
 }
-
+        
 window.approvePlan = async function(planId) {
     if (!confirm('Approve this plan?')) return;
     
@@ -1944,6 +1945,121 @@ document.getElementById('refreshPlanApprovalsBtn').addEventListener('click', () 
                 addBtn.textContent = 'Add Project';
             }
         });
+
+        let editingPlanId = null;
+let editingPlanApprovals = [];
+
+window.openPlanEditModal = function(planId) {
+    // Find the approvals for this planId from the last loaded data
+    const url = GOOGLE_SCRIPT_URL + '?action=getPendingPlanApprovals&approver=' + encodeURIComponent(currentUser);
+    fetch(url).then(r => r.json()).then(result => {
+        if (result.status !== 'success') return;
+        
+        editingPlanId = planId;
+        editingPlanApprovals = result.approvals.filter(a => a.planId === planId);
+        
+        const fieldsDiv = document.getElementById('planEditFields');
+        let html = '';
+        
+        editingPlanApprovals.forEach((item, i) => {
+            html += `
+            <div class="border rounded-lg p-3 bg-gray-50">
+                <p class="font-semibold text-gray-700 mb-2">Entry ${i+1}: ${item.client} / ${item.project}</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-gray-600">Date</label>
+                        <input type="date" class="edit-date w-full p-2 border rounded text-sm" value="${formatDateForInput(item.date)}">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-600">Planned Hours</label>
+                        <input type="number" class="edit-planned w-full p-2 border rounded text-sm" step="0.25" min="0" value="${item.plannedHours}">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="text-xs text-gray-600">Activity</label>
+                        <textarea class="edit-activity w-full p-2 border rounded text-sm" rows="2">${item.activity}</textarea>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-600">Type</label>
+                        <select class="edit-type w-full p-2 border rounded text-sm">
+                            <option value="Recurring" ${item.type === 'Recurring' ? 'selected' : ''}>Recurring</option>
+                            <option value="Adhoc" ${item.type === 'Adhoc' ? 'selected' : ''}>Adhoc</option>
+                        </select>
+                    </div>
+                </div>
+            </div>`;
+        });
+        
+        fieldsDiv.innerHTML = html;
+        document.getElementById('planEditModal').classList.remove('hidden');
+    });
+};
+
+window.closePlanEditModal = function() {
+    document.getElementById('planEditModal').classList.add('hidden');
+    editingPlanId = null;
+    editingPlanApprovals = [];
+};
+
+window.saveAndApprovePlan = async function() {
+    // First reject the old plan, then submit a corrected one as admin (auto-approved)
+    const entries = document.querySelectorAll('#planEditFields > div');
+    const updatedActivities = [];
+    
+    entries.forEach((entry, i) => {
+        const original = editingPlanApprovals[i];
+        updatedActivities.push({
+            date: entry.querySelector('.edit-date').value,
+            clientName: original.client,
+            project: original.project,
+            activity: entry.querySelector('.edit-activity').value,
+            plannedHours: entry.querySelector('.edit-planned').value,
+            adminAssigned: currentUser,
+            type: entry.querySelector('.edit-type').value,
+            user: original.submittedBy
+        });
+    });
+    
+    try {
+        // Reject old plan
+        await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'rejectPlan', planId: editingPlanId })
+        });
+        
+        // Submit corrected plan as admin (auto-approved)
+        await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST', mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'submitPlan',
+                activities: updatedActivities,
+                submittedBy: editingPlanApprovals[0].submittedBy,
+                isAdmin: true  // auto-approve
+            })
+        });
+        
+        closePlanEditModal();
+        alert('Plan edited and approved!');
+        loadPendingPlanApprovals();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
     </script>
+
+    <!-- Plan Edit Modal -->
+<div id="planEditModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full">
+        <div class="bg-purple-600 text-white p-4 rounded-t-lg">
+            <h2 class="text-xl font-bold">✏️ Edit Plan Before Approving</h2>
+        </div>
+        <div class="p-6 space-y-3" id="planEditFields"></div>
+        <div class="flex justify-between p-4 border-t bg-gray-50 rounded-b-lg">
+            <button onclick="closePlanEditModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg">Cancel</button>
+            <button onclick="saveAndApprovePlan()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg">✓ Save & Approve</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
