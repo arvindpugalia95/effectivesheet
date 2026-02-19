@@ -5,6 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Client Activity Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+    #dataTableBody tr td,
+    #reviewTableBody tr td {
+        white-space: nowrap;
+        vertical-align: top;
+    }
+
+    /* Activity column — allow it to wrap and expand */
+    #dataTableBody tr td:nth-child(4),
+    #reviewTableBody tr td:nth-child(5) {
+        white-space: normal;
+        min-width: 220px;
+        max-width: 350px;
+        word-break: break-word;
+    }
+
+    /* Make tables auto-fit columns to content */
+    #dataTableBody,
+    #reviewTableBody {
+        width: 100%;
+    }
+
+    table {
+        table-layout: auto;
+        width: 100%;
+    }
+</style>
+
+    
 </head>
 <body class="bg-gray-50 min-h-screen p-6">
     <!-- Login Page -->
