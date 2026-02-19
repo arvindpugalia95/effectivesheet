@@ -160,9 +160,15 @@
                 <div class="text-right">
                     <p class="text-sm text-gray-600">Logged in as:</p>
                     <p class="font-semibold text-gray-800" id="loggedInUser"></p>
+
                     <button id="logoutBtn" class="mt-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">
-                        Logout
-                    </button>
+    Logout
+</button>
+<a id="reportBtn" href="https://arvindpugalia95.github.io/SimpleReportScript/" target="_blank" class="hidden mt-2 ml-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200 inline-block">
+    📊 Report
+</a>
+
+                    
                 </div>
             </div>
 
@@ -551,10 +557,12 @@ function checkSubmissionMode() {
     
     // Show appropriate buttons
     if (currentUserRole === 'admin') {
+        document.getElementById('reportBtn').classList.remove('hidden');
         if (hasEmptyHours && !hasFilledHours) {
             // All rows have empty hours - show submit plan
             document.getElementById('submitBtn').classList.add('hidden');
             document.getElementById('submitPlanBtn').classList.remove('hidden');
+            
         } else if (hasFilledHours) {
             // Some/all rows have hours - show submit all
             document.getElementById('submitBtn').classList.remove('hidden');
