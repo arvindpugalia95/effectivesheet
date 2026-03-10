@@ -1,1927 +1,1056 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Client Activity Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+// Google Sheet ID
+const SHEET_ID = '1tepz8ZZuYw1f3yzh90KopEX6NtHDvBWqVJlyFJpbDAk';
 
-<style>
-    #dataTableBody tr td,
-    #reviewTableBody tr td {
-        white-space: nowrap;
-        vertical-align: top;
+function doGet(e) {
+  const action = e.parameter.action;
+  
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    
+    // Handle LOGIN
+    if (action === 'login') {
+      const username = e.parameter.username;
+      const password = e.parameter.password;
+      
+      if (!username || !password) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Username and password are required'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      let userSheet = ss.getSheetByName('User Master');
+      if (!userSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'User Master sheet not found'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = userSheet.getLastRow();
+      if (lastRow <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'No users found'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const userData = userSheet.getRange(2, 1, lastRow - 1, 3).getValues();
+      
+      for (let i = 0; i < userData.length; i++) {
+        const storedUsername = String(userData[i][0]).trim();
+        const storedPassword = String(userData[i][1]).trim();
+        const storedRole = String(userData[i][2] || 'data').trim().toLowerCase();
+        
+        if (storedUsername === username && storedPassword === password) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: 'success',
+            message: 'Login successful',
+            username: username,
+            role: storedRole
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'Invalid username or password'
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-
-    #dataTableBody tr td:nth-child(5),
-    #dataTableBody tr td:nth-child(6),
-    #reviewTableBody tr td:nth-child(6),
-    #reviewTableBody tr td:nth-child(7) {
-        white-space: normal;
-        min-width: 180px;
-        max-width: 300px;
-        word-break: break-word;
+    
+    // Handle GET CLIENTS (from Client Master sheet)
+    if (action === 'getClients') {
+      const clientSheet = ss.getSheetByName('Client Master');
+      let clientNames = [];
+      
+      if (clientSheet) {
+        const lastRow = clientSheet.getLastRow();
+        if (lastRow > 1) {
+          const data = clientSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+          clientNames = data
+            .map(row => String(row[0]).trim())
+            .filter(name => name !== '');
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        clients: clientNames
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-
-    #dataTableBody,
-    #reviewTableBody {
-        width: 100%;
+    
+    // Handle GET PROJECTS
+    if (action === 'getProjects') {
+      const projectSheet = ss.getSheetByName('Projects');
+      
+      if (!projectSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          projects: {}
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = projectSheet.getLastRow();
+      if (lastRow <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          projects: {}
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const projectData = projectSheet.getRange(1, 1, lastRow, 2).getValues();
+      const projects = {};
+      
+      for (let i = 1; i < projectData.length; i++) {
+        const client = projectData[i][0];
+        const project = projectData[i][1];
+        
+        if (client && project) {
+          if (!projects[client]) {
+            projects[client] = [];
+          }
+          projects[client].push(project);
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        projects: projects
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-
-    table {
-        table-layout: auto;
-        width: 100%;
+    
+    // Handle GET ADMINS
+    if (action === 'getAdmins') {
+      const userSheet = ss.getSheetByName('User Master');
+      if (!userSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          admins: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = userSheet.getLastRow();
+      if (lastRow <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          admins: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const userData = userSheet.getRange(2, 1, lastRow - 1, 3).getValues();
+      const admins = [];
+      
+      for (let i = 0; i < userData.length; i++) {
+        const username = String(userData[i][0]).trim();
+        const role = String(userData[i][2] || 'data').trim().toLowerCase();
+        
+        if (role === 'admin' && username) {
+          admins.push(username);
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        admins: admins
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-
-    #dataTableBody tr td:nth-child(3),
-    #reviewTableBody tr td:nth-child(4) {
-        white-space: normal;
-        min-width: 140px;
+    
+    // Handle GET MY APPROVED PLANS
+    if (action === 'getMyApprovedPlans') {
+      const username = e.parameter.username;
+      
+      let planSheet = ss.getSheetByName('Planned Activities');
+      if (!planSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          plans: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = planSheet.getLastRow();
+      if (lastRow <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          plans: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      // Updated to read 12 columns (added Actual Activity at col 12)
+      const data = planSheet.getRange(2, 1, lastRow - 1, 12).getValues();
+      const plans = [];
+      
+      for (let i = 0; i < data.length; i++) {
+        const submittedBy = String(data[i][8]).trim();
+        const status = String(data[i][10]).trim();
+        
+        if (submittedBy === username && status === 'Approved') {
+          plans.push({
+            planId: String(data[i][0]),
+            date: String(data[i][1]),
+            client: String(data[i][2]),
+            project: String(data[i][3]),
+            activity: String(data[i][4]),
+            plannedHours: data[i][5],
+            admin: String(data[i][9]),
+            type: String(data[i][6]),
+            rowIndex: i + 2 // actual sheet row
+          });
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        plans: plans
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-
-    #dataTableBody tr td:nth-child(4),
-    #reviewTableBody tr td:nth-child(5) {
-        white-space: normal;
-        min-width: 140px;
+    
+    // Handle GET PENDING PLAN APPROVALS
+    if (action === 'getPendingPlanApprovals') {
+      const approverUsername = e.parameter.approver;
+      
+      let planSheet = ss.getSheetByName('Planned Activities');
+      if (!planSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          approvals: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = planSheet.getLastRow();
+      if (lastRow <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          approvals: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const data = planSheet.getRange(2, 1, lastRow - 1, 12).getValues();
+      const approvals = [];
+      
+      for (let i = 0; i < data.length; i++) {
+        const status = String(data[i][10]).trim();
+        const approver = String(data[i][9]).trim();
+        
+        if (status === 'Pending' && approver === approverUsername) {
+          approvals.push({
+            planId: String(data[i][0]),
+            date: String(data[i][1]),
+            client: String(data[i][2]),
+            project: String(data[i][3]),
+            activity: String(data[i][4]),
+            plannedHours: data[i][5],
+            type: String(data[i][6]),
+            submittedBy: String(data[i][8]),
+            submittedAt: String(data[i][7]),
+            rowIndex: i + 2
+          });
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        approvals: approvals
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-
-    .row-selected {
-        background-color: #dbeafe !important;
-        border-left: 3px solid #3b82f6;
+    
+    // Handle GET PENDING APPROVALS
+    if (action === 'getPendingApprovals') {
+      const approverUsername = e.parameter.approver;
+      
+      let pendingSheet = ss.getSheetByName('Pending Approvals');
+      if (!pendingSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          approvals: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = pendingSheet.getLastRow();
+      if (lastRow <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          approvals: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      // Updated to read 16 columns (added Actual Activity at col 15, Status at col 16)
+      const data = pendingSheet.getRange(2, 1, lastRow - 1, 16).getValues();
+      const approvals = [];
+      
+      for (let i = 0; i < data.length; i++) {
+        const status = String(data[i][15]).trim();
+        const approver = String(data[i][14]).trim();
+        
+        if (status === 'Pending' && approver === approverUsername) {
+          approvals.push({
+            submissionId: String(data[i][0]),
+            date: String(data[i][1]),
+            client: String(data[i][2]),
+            project: String(data[i][3]),
+            activity: String(data[i][4]),
+            actualActivity: String(data[i][5]),
+            plannedHours: data[i][6],
+            clockifyHours: data[i][7],
+            effectiveHours: data[i][8],
+            billedHours: data[i][9],
+            type: String(data[i][10]),
+            submittedBy: String(data[i][11]),
+            submittedAt: String(data[i][12]),
+            rowIndex: i + 2
+          });
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        approvals: approvals
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-
-    .select-all-header {
-        cursor: pointer;
+    
+    // Handle GET REJECTED SUBMISSIONS
+    if (action === 'getRejectedSubmissions') {
+      const username = e.parameter.username;
+      
+      let pendingSheet = ss.getSheetByName('Pending Approvals');
+      if (!pendingSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          rejected: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = pendingSheet.getLastRow();
+      if (lastRow <= 1) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          rejected: []
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const data = pendingSheet.getRange(2, 1, lastRow - 1, 16).getValues();
+      const rejected = [];
+      
+      for (let i = 0; i < data.length; i++) {
+        const status = String(data[i][15]).trim();
+        const submittedBy = String(data[i][11]).trim();
+        
+        if (status === 'Rejected' && submittedBy === username) {
+          rejected.push({
+            submissionId: String(data[i][0]),
+            date: String(data[i][1]),
+            client: String(data[i][2]),
+            project: String(data[i][3]),
+            activity: String(data[i][4]),
+            actualActivity: String(data[i][5]),
+            plannedHours: data[i][6],
+            clockifyHours: data[i][7],
+            effectiveHours: data[i][8],
+            billedHours: data[i][9],
+            type: String(data[i][10]),
+            approver: String(data[i][14])
+          });
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        rejected: rejected
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-
-    /* Edit modal inputs */
-    .edit-modal-input {
-        width: 100%;
-        padding: 6px 8px;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        font-size: 0.875rem;
+    
+    // Handle DELETE REJECTED SUBMISSION
+    if (action === 'deleteRejectedSubmission') {
+      const submissionId = e.parameter.submissionId;
+      
+      let pendingSheet = ss.getSheetByName('Pending Approvals');
+      if (!pendingSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Sheet not found'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = pendingSheet.getLastRow();
+      const data = pendingSheet.getRange(2, 1, lastRow - 1, 16).getValues();
+      
+      let deletedCount = 0;
+      for (let i = data.length - 1; i >= 0; i--) {
+        const rowSubmissionId = String(data[i][0]);
+        const rowStatus = String(data[i][15]).trim();
+        
+        if (rowSubmissionId === submissionId && rowStatus === 'Rejected') {
+          pendingSheet.deleteRow(i + 2);
+          deletedCount++;
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: `Deleted ${deletedCount} entries`
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-    .edit-modal-input:focus {
-        outline: none;
-        border-color: #6366f1;
-        box-shadow: 0 0 0 2px rgba(99,102,241,0.2);
+    
+    // Handle ADD CLIENT (add to Client Master sheet)
+    if (action === 'addClient') {
+      const clientName = e.parameter.clientName;
+      
+      if (!clientName) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Client name is required'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      let clientSheet = ss.getSheetByName('Client Master');
+      if (!clientSheet) {
+        clientSheet = ss.insertSheet('Client Master');
+        clientSheet.appendRow(['Client Name']);
+        const headerRange = clientSheet.getRange(1, 1, 1, 1);
+        headerRange.setFontWeight('bold');
+        headerRange.setBackground('#4285f4');
+        headerRange.setFontColor('#ffffff');
+      }
+      
+      // Check if client already exists
+      const lastRow = clientSheet.getLastRow();
+      if (lastRow > 1) {
+        const existingClients = clientSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        for (let i = 0; i < existingClients.length; i++) {
+          if (String(existingClients[i][0]).trim().toLowerCase() === clientName.trim().toLowerCase()) {
+            return ContentService.createTextOutput(JSON.stringify({
+              status: 'error',
+              message: 'Client already exists!'
+            })).setMimeType(ContentService.MimeType.JSON);
+          }
+        }
+      }
+      
+      // Add client to Client Master
+      clientSheet.appendRow([clientName]);
+      
+      // Read updated client list
+      const newLastRow = clientSheet.getLastRow();
+      const clientNames = [];
+      if (newLastRow > 1) {
+        const data = clientSheet.getRange(2, 1, newLastRow - 1, 1).getValues();
+        data.forEach(row => {
+          const name = String(row[0]).trim();
+          if (name) clientNames.push(name);
+        });
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Client added successfully!',
+        clients: clientNames
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-</style>
-
-</head>
-<body class="bg-gray-50 min-h-screen p-6">
-    <!-- Login Page -->
-    <div id="loginPage" class="max-w-md mx-auto mt-20">
-        <div class="bg-white rounded-lg shadow-lg p-8">
-            <h1 class="text-3xl font-bold text-gray-800 mb-2 text-center">Client Activity Tracker</h1>
-            <p class="text-gray-600 mb-6 text-center">Please login to continue</p>
-            
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                    <input type="text" id="loginUsername" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Enter username">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
-                    <input type="password" id="loginPassword" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Enter password">
-                </div>
-                
-                <button id="loginBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200">
-                    Login
-                </button>
-                
-                <div id="loginError" class="hidden p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg text-sm"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Review Modal -->
-    <div id="reviewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
-            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
-                <h2 class="text-2xl font-bold">📋 Review Your Submission</h2>
-                <p class="text-blue-100 mt-1">Please review all entries before submitting</p>
-            </div>
-
-            <div class="p-6 overflow-y-auto max-h-[60vh]">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                        <p class="text-sm text-gray-600 mb-1">Total Entries</p>
-                        <p class="text-3xl font-bold text-blue-600" id="reviewTotalEntries">0</p>
-                    </div>
-                    <div class="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                        <p class="text-sm text-gray-600 mb-1">Total Clockify Hours</p>
-                        <p class="text-3xl font-bold text-purple-600" id="reviewTotalClockify">0.00</p>
-                    </div>
-                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
-                        <p class="text-sm text-gray-600 mb-1">Total Effective Hours</p>
-                        <p class="text-3xl font-bold text-green-600">
-                            <span id="reviewTotalEffective">0.00</span>
-                            <span class="text-sm text-gray-500 ml-2">(<span id="reviewPercentage">0</span>%)</span>
-                        </p>
-                    </div>
-                    <div class="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                        <p class="text-sm text-gray-600 mb-1">Total Billed Hours</p>
-                        <p class="text-3xl font-bold text-orange-600" id="reviewTotalBilled">0.00</p>
-                    </div>
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full border-collapse border border-gray-300">
-                        <thead>
-                            <tr class="bg-gray-100">
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">#</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Date</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Client</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Project</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Activity</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Actual Activity</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Planned</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Clockify</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Effective</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Billed</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold">Type</th>
-                                <th class="border border-gray-300 p-2 text-left text-sm font-semibold" id="adminColumnHeader">Admin</th>
-                            </tr>
-                        </thead>
-                        <tbody id="reviewTableBody"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="bg-gray-50 px-6 py-4 flex justify-between items-center border-t">
-                <button id="cancelReviewBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-8 rounded-lg transition duration-200">
-                    ← Go Back & Edit
-                </button>
-                <button id="confirmSubmitBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-lg">
-                    ✓ Confirm & Submit
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main App (Hidden until login) -->
-    <div id="mainApp" class="max-w-7xl mx-auto hidden">
-        <div class="bg-white rounded-lg shadow-md p-8">
-            <!-- Header -->
-            <div class="flex justify-between items-center mb-6 pb-4 border-b">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-800">Client Activity Tracker</h1>
-                    <p class="text-gray-600">Enter daily client activities</p>
-                </div>
-                <div class="text-right">
-                    <p class="text-sm text-gray-600">Logged in as:</p>
-                    <p class="font-semibold text-gray-800" id="loggedInUser"></p>
-                    <button id="logoutBtn" class="mt-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">Logout</button>
-                    <a id="reportBtn" href="https://arvindpugalia95.github.io/SimpleReportScript/" target="_blank" class="hidden mt-2 ml-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200 inline-block">📊 Report</a>
-                </div>
-            </div>
-
-            <!-- Hours Summary Card -->
-            <div class="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-600 rounded-lg shadow-sm">
-                <h3 class="text-lg font-bold text-blue-900 mb-4">📊 Hours Summary</h3>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div class="bg-white p-4 rounded-lg shadow-sm">
-                        <p class="text-sm text-gray-600 mb-1">Planned Hours</p>
-                        <p class="text-3xl font-bold text-blue-600" id="totalPlannedHours">0.00</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-lg shadow-sm">
-                        <p class="text-sm text-gray-600 mb-1">Clockify Hours</p>
-                        <p class="text-3xl font-bold text-purple-600" id="totalClockifyHours">0.00</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-lg shadow-sm">
-                        <p class="text-sm text-gray-600 mb-1">Effective Hours</p>
-                        <p class="text-3xl font-bold text-green-600">
-                            <span id="totalEffectiveHours">0.00</span>
-                            <span class="text-sm text-gray-500 ml-2">(<span id="effectivePercentage">0</span>%)</span>
-                        </p>
-                    </div>
-                    <div class="bg-white p-4 rounded-lg shadow-sm">
-                        <p class="text-sm text-gray-600 mb-1">Billed Hours</p>
-                        <p class="text-3xl font-bold text-orange-600" id="totalBilledHours">0.00</p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Connection Test -->
-            <div class="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="font-semibold text-yellow-900 mb-1">🔍 Connection Test</h3>
-                        <p class="text-sm text-yellow-800">Click to test if the Google Apps Script is working</p>
-                    </div>
-                    <button id="testConnectionBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200">Test Connection</button>
-                </div>
-                <div id="testResult" class="mt-3 hidden"></div>
-            </div>
-            
-            <!-- Selection Info Bar -->
-            <div id="selectionBar" class="hidden mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg flex items-center justify-between">
-                <span class="text-blue-800 font-medium"><span id="selectedCount">0</span> row(s) selected</span>
-                <div class="flex gap-2">
-                    <button id="submitSelectedPlanBtn" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">📅 Submit Selected as Plan</button>
-                    <button id="submitSelectedHoursBtn" class="hidden bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">📤 Submit Selected Hours</button>
-                    <button id="submitSelectedDirectBtn" class="hidden bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">✓ Submit Selected Direct</button>
-                    <button id="clearSelectionBtn" class="bg-gray-500 hover:bg-gray-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">Clear Selection</button>
-                </div>
-            </div>
-
-            <!-- Data Entry Table -->
-            <div class="overflow-x-auto mb-6">
-                <table class="w-full border-collapse border border-gray-300">
-                    <thead>
-                        <tr class="bg-blue-600 text-white">
-                            <th class="border border-gray-300 p-3 text-center font-semibold w-10">
-                                <input type="checkbox" id="selectAllCheckbox" class="w-4 h-4 cursor-pointer" title="Select All">
-                            </th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">DATE</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Client Name</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Project</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Activity</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Actual Activity</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Planned Hours</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Clockify Hours</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Effective Hours</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Billed Hours</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Admin</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">Recurring/Adhoc</th>
-                            <th class="border border-gray-300 p-3 text-left font-semibold">User</th>
-                            <th class="border border-gray-300 p-3 text-center font-semibold w-20">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="dataTableBody"></tbody>
-                </table>
-            </div>
-
-            <!-- Buttons Row -->
-            <div class="flex flex-wrap gap-3 mb-4">
-                <button id="addRowBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 shadow-md">
-                    <span class="text-xl mr-2">+</span> Add Row
-                </button>
-                <button id="saveProgressBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md">
-                    💾 Save Progress
-                </button>
-                <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md hidden">
-                    Submit All Entries
-                </button>
-                <button id="submitForApprovalBtn" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md hidden">
-                    📤 Submit All for Approval
-                </button>
-                <button id="submitPlanBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 shadow-md hidden">
-                    📅 Submit All as Plan
-                </button>
-            </div>
-
-            <!-- Status Message -->
-            <div id="statusMessage" class="mt-4 mb-8 hidden"></div>
-
-            <!-- Rejected Submissions (Data User Only) -->
-            <div id="rejectedSubmissionsSection" class="hidden mb-8 p-6 bg-red-50 border-l-4 border-red-600 rounded-lg">
-                <h2 class="text-xl font-bold text-red-900 mb-4">❌ Rejected Submissions</h2>
-                <p class="text-sm text-red-800 mb-4">These submissions were rejected by the admin. You can load them back, edit, and resubmit.</p>
-                <button id="refreshRejectedBtn" class="mb-4 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">🔄 Refresh Rejected</button>
-                <div id="rejectedList"></div>
-            </div>
-
-            <!-- Approval Dashboard (Admin Only) -->
-            <div id="approvalDashboard" class="hidden mb-8 p-6 bg-orange-50 border-l-4 border-orange-600 rounded-lg">
-                <h2 class="text-xl font-bold text-orange-900 mb-4">🔔 Pending Approvals</h2>
-                <button id="refreshApprovalsBtn" class="mb-4 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">🔄 Refresh Approvals</button>
-                <div id="approvalsList"></div>
-            </div>
-
-            <!-- Plan Approval Dashboard (Admin Only) -->
-            <div id="planApprovalDashboard" class="hidden mb-8 p-6 bg-purple-50 border-l-4 border-purple-600 rounded-lg">
-                <h2 class="text-xl font-bold text-purple-900 mb-4">📅 Pending Plan Approvals</h2>
-                <button id="refreshPlanApprovalsBtn" class="mb-4 bg-purple-500 hover:bg-purple-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">🔄 Refresh Plan Approvals</button>
-                <div id="planApprovalsList"></div>
-            </div>
-
-            <hr class="my-8 border-t-2 border-gray-300">
-
-            <!-- Client Master Section (Admin Only) -->
-            <div id="clientMasterSection" class="bg-blue-50 border-l-4 border-blue-600 p-6 mb-6 rounded-lg hidden">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold text-blue-900">📋 Client Master</h2>
-                    <button id="refreshClientsBtn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">🔄 Refresh</button>
-                </div>
-                <div class="flex gap-4 items-end">
-                    <div class="flex-1">
-                        <label class="block text-sm font-medium text-blue-900 mb-2">Add New Client</label>
-                        <input type="text" id="newClientName" class="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Enter client name...">
-                    </div>
-                    <button id="addClientBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 shadow-md">Add Client</button>
-                </div>
-                <div id="clientMasterStatus" class="mt-3 hidden"></div>
-                <div class="mt-4">
-                    <p class="text-sm text-blue-800 font-medium mb-2">Current Clients:</p>
-                    <div id="clientList" class="flex flex-wrap gap-2">
-                        <span class="text-sm text-gray-500 italic">Loading clients...</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Project Master Section (Admin Only) -->
-            <div id="projectMasterSection" class="bg-green-50 border-l-4 border-green-600 p-6 mb-8 rounded-lg hidden">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold text-green-900">🗂️ Project Master</h2>
-                    <button id="refreshProjectsBtn" class="bg-green-500 hover:bg-green-600 text-white text-sm font-semibold py-2 px-4 rounded transition duration-200">🔄 Refresh</button>
-                </div>
-                <div class="flex gap-4 items-end">
-                    <div class="flex-1">
-                        <label class="block text-sm font-medium text-green-900 mb-2">Select Client</label>
-                        <select id="projectClientSelect" class="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                            <option value="">Select Client...</option>
-                        </select>
-                    </div>
-                    <div class="flex-1">
-                        <label class="block text-sm font-medium text-green-900 mb-2">Project Name</label>
-                        <input type="text" id="newProjectName" class="w-full p-3 border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500" placeholder="Enter project name...">
-                    </div>
-                    <button id="addProjectBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 shadow-md">Add Project</button>
-                </div>
-                <div id="projectMasterStatus" class="mt-3 hidden"></div>
-                <div class="mt-4">
-                    <p class="text-sm text-green-800 font-medium mb-2">Projects by Client:</p>
-                    <div id="projectList" class="space-y-2">
-                        <span class="text-sm text-gray-500 italic">Loading projects...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Plan Edit Modal (Admin) -->
-    <div id="planEditModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div class="bg-purple-600 text-white p-4 rounded-t-lg">
-                <h2 class="text-xl font-bold">✏️ Edit Plan Item</h2>
-            </div>
-            <div class="p-6 space-y-3 overflow-y-auto max-h-[60vh]" id="planEditFields"></div>
-            <div class="flex justify-between p-4 border-t bg-gray-50 rounded-b-lg">
-                <button onclick="closePlanEditModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg">Cancel</button>
-                <button onclick="saveAndApprovePlan()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg">✓ Save & Approve</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Pending Approval Edit Modal (Admin) -->
-    <div id="pendingEditModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div class="bg-orange-600 text-white p-4 rounded-t-lg">
-                <h2 class="text-xl font-bold">✏️ Edit Submission Item</h2>
-            </div>
-            <div class="p-6 space-y-3 overflow-y-auto max-h-[60vh]" id="pendingEditFields"></div>
-            <div class="flex justify-between p-4 border-t bg-gray-50 rounded-b-lg">
-                <button onclick="closePendingEditModal()" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg">Cancel</button>
-                <button onclick="savePendingEdit()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg">💾 Save Changes</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzlKdHrNToeJrV9X6Z4bV_QC0rL9HzhW7i_QjFFEmM-Bmypbkf7aJrF1VWB0pM6TXo8/exec';
-
-        let currentUser = null;
-        let currentUserRole = null;
-        let clientsList = [];
-        let projectsMap = {};
-        let adminsList = [];
-        let rowCounter = 0;
-        let pendingActivities = [];
-        let pendingSubmissionType = null;
-        let approvedPlanRows = new Set();
-
-        // ===================== SELECTION MANAGEMENT =====================
-        function getSelectedRowIds() {
-            const checkboxes = document.querySelectorAll('.row-checkbox:checked');
-            return Array.from(checkboxes).map(cb => parseInt(cb.dataset.rowId));
+    
+    // Handle ADD PROJECT
+    if (action === 'addProject') {
+      const clientName = e.parameter.clientName;
+      const projectName = e.parameter.projectName;
+      
+      if (!clientName || !projectName) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Client name and project name are required'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      let projectSheet = ss.getSheetByName('Projects');
+      if (!projectSheet) {
+        projectSheet = ss.insertSheet('Projects');
+        projectSheet.appendRow(['Client Name', 'Project Name']);
+        projectSheet.getRange(projectSheet.getLastRow(), 1, 1, 2).setWrap(true);
+        
+        const headerRange = projectSheet.getRange(1, 1, 1, 2);
+        headerRange.setFontWeight('bold');
+        headerRange.setBackground('#34a853');
+        headerRange.setFontColor('#ffffff');
+        projectSheet.autoResizeColumns(1, 2);
+      }
+      
+      projectSheet.appendRow([clientName, projectName]);
+      projectSheet.getRange(projectSheet.getLastRow(), 1, 1, 2).setWrap(true);
+      
+      const lastRow = projectSheet.getLastRow();
+      const projectData = projectSheet.getRange(1, 1, lastRow, 2).getValues();
+      const projects = {};
+      
+      for (let i = 1; i < projectData.length; i++) {
+        const client = projectData[i][0];
+        const project = projectData[i][1];
+        
+        if (client && project) {
+          if (!projects[client]) {
+            projects[client] = [];
+          }
+          projects[client].push(project);
         }
-
-        function updateSelectionBar() {
-            const selectedIds = getSelectedRowIds();
-            const count = selectedIds.length;
-            const bar = document.getElementById('selectionBar');
-            
-            if (count === 0) {
-                bar.classList.add('hidden');
-                return;
-            }
-            
-            bar.classList.remove('hidden');
-            document.getElementById('selectedCount').textContent = count;
-            
-            // Check what type of rows are selected (plan-only or hours-filled)
-            let hasPlanOnly = false;
-            let hasHoursFilled = false;
-            
-            selectedIds.forEach(rowId => {
-                const row = document.getElementById(`row-${rowId}`);
-                if (!row) return;
-                const clockify = row.querySelector('.row-clockify')?.value || '';
-                const effective = row.querySelector('.row-effective')?.value || '';
-                const billed = row.querySelector('.row-billed')?.value || '';
-                
-                if (clockify === '' && effective === '' && billed === '') {
-                    hasPlanOnly = true;
-                } else {
-                    hasHoursFilled = true;
-                }
-            });
-            
-            // Show appropriate buttons based on selection and role
-            const planBtn = document.getElementById('submitSelectedPlanBtn');
-            const hoursBtn = document.getElementById('submitSelectedHoursBtn');
-            const directBtn = document.getElementById('submitSelectedDirectBtn');
-            
-            planBtn.classList.add('hidden');
-            hoursBtn.classList.add('hidden');
-            directBtn.classList.add('hidden');
-            
-            if (hasPlanOnly && !hasHoursFilled) {
-                planBtn.classList.remove('hidden');
-            }
-            if (hasHoursFilled && !hasPlanOnly) {
-                if (currentUserRole === 'admin') {
-                    directBtn.classList.remove('hidden');
-                } else {
-                    hoursBtn.classList.remove('hidden');
-                }
-            }
-            if (hasPlanOnly && hasHoursFilled) {
-                // Mixed selection — show nothing specific, user should separate them
-                // Or show a warning
-            }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Project added successfully!',
+        projects: projects
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle GET LOCK DATE
+    if (action === 'getLockDate') {
+      const lockSheet = ss.getSheetByName('Lock');
+      let lockDate = '';
+      
+      if (lockSheet) {
+        const val = lockSheet.getRange('A1').getValue();
+        if (val) {
+          if (val instanceof Date) {
+            const y = val.getFullYear();
+            const m = String(val.getMonth() + 1).padStart(2, '0');
+            const d = String(val.getDate()).padStart(2, '0');
+            lockDate = `${y}-${m}-${d}`;
+          } else {
+            lockDate = String(val).trim();
+          }
         }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        lockDate: lockDate
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: 'Invalid action'
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
 
-        document.getElementById('selectAllCheckbox').addEventListener('change', function() {
-            const checkboxes = document.querySelectorAll('.row-checkbox');
-            checkboxes.forEach(cb => {
-                cb.checked = this.checked;
-                const row = document.getElementById(`row-${cb.dataset.rowId}`);
-                if (row) {
-                    if (this.checked) row.classList.add('row-selected');
-                    else row.classList.remove('row-selected');
-                }
-            });
-            updateSelectionBar();
-        });
+// Helper: Read lock date and return as YYYY-MM-DD string
+function getLockDateValue(ss) {
+  const lockSheet = ss.getSheetByName('Lock');
+  if (!lockSheet) return '';
+  
+  const val = lockSheet.getRange('A1').getValue();
+  if (!val) return '';
+  
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return String(val).trim();
+}
 
-        document.getElementById('clearSelectionBtn').addEventListener('click', () => {
-            document.getElementById('selectAllCheckbox').checked = false;
-            document.querySelectorAll('.row-checkbox').forEach(cb => {
-                cb.checked = false;
-                const row = document.getElementById(`row-${cb.dataset.rowId}`);
-                if (row) row.classList.remove('row-selected');
-            });
-            updateSelectionBar();
-        });
-
-        // Submit Selected as Plan
-        document.getElementById('submitSelectedPlanBtn').addEventListener('click', () => {
-            submitSelectedRows('plan');
-        });
-
-        // Submit Selected Hours (data user)
-        document.getElementById('submitSelectedHoursBtn').addEventListener('click', () => {
-            submitSelectedRows('approval');
-        });
-
-        // Submit Selected Direct (admin)
-        document.getElementById('submitSelectedDirectBtn').addEventListener('click', () => {
-            submitSelectedRows('admin');
-        });
-
-        function submitSelectedRows(mode) {
-            const selectedIds = getSelectedRowIds();
-            if (selectedIds.length === 0) return;
-
-            const activities = [];
-            let hasError = false;
-            
-            selectedIds.forEach(rowId => {
-                const row = document.getElementById(`row-${rowId}`);
-                if (!row) return;
-                
-                const date = row.querySelector('.row-date').value;
-                const client = row.querySelector('.row-client').value;
-                const project = row.querySelector('.row-project').value;
-                const activity = row.querySelector('.row-activity').value;
-                const actualActivity = row.querySelector('.row-actual-activity')?.value || '';
-                const planned = row.querySelector('.row-planned').value;
-                const clockify = row.querySelector('.row-clockify').value;
-                const effective = row.querySelector('.row-effective').value;
-                const billed = row.querySelector('.row-billed').value;
-                const admin = row.querySelector('.row-admin').value;
-                const type = row.querySelector('.row-type').value;
-                const user = row.querySelector('.row-user').value;
-                const planRowIndex = row.dataset.planRowIndex || '';
-                
-                if (mode === 'plan') {
-                    if (!date || !client || !project || !activity || !planned || !admin || !type || !user) {
-                        hasError = true;
-                        row.classList.add('bg-red-50');
-                    } else {
-                        row.classList.remove('bg-red-50');
-                        activities.push({ date, clientName: client, project, activity, plannedHours: planned, adminAssigned: admin, type, user });
-                    }
-                } else {
-                    if (!date || !client || !project || !activity || !clockify || !effective || !billed || !type || !user) {
-                        hasError = true;
-                        row.classList.add('bg-red-50');
-                    } else {
-                        row.classList.remove('bg-red-50');
-                        activities.push({
-                            date, clientName: client, project, activity, actualActivity,
-                            plannedHours: planned || '0',
-                            clockifyHours: clockify, effectiveHours: effective, billedHours: billed,
-                            adminAssigned: admin, type, user, planRowIndex
-                        });
-                    }
-                }
-            });
-            
-            if (hasError) {
-                showStatus('❌ Please fill in all required fields in selected rows!', 'red');
-                return;
-            }
-            
-            if (mode === 'plan') {
-                submitPlanActivities(activities);
-            } else {
-                showReviewModal(activities, mode);
-            }
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    
+    // Get lock date for validation
+    const lockDate = getLockDateValue(ss);
+    
+    // Helper: Check if any activity date violates the lock date
+    function checkLockDate(activities) {
+      if (!lockDate) return null; // No lock set
+      for (let activity of activities) {
+        const actDate = activity.date || '';
+        if (actDate && actDate <= lockDate) {
+          return `Entry date ${actDate} is on or before the lock date (${lockDate}). No entries allowed before ${lockDate}.`;
         }
-
-        // ===================== HELPER FUNCTIONS =====================
-        function showStatus(msg, color) {
-            const statusDiv = document.getElementById('statusMessage');
-            statusDiv.className = `mt-4 p-4 bg-${color}-100 border border-${color}-400 text-${color}-800 rounded-lg`;
-            statusDiv.textContent = msg;
-            statusDiv.classList.remove('hidden');
-            setTimeout(() => statusDiv.classList.add('hidden'), 5000);
+      }
+      return null; // All dates OK
+    }
+    
+    // Handle SUBMIT PLAN
+    if (data.action === 'submitPlan') {
+      const activities = data.activities;
+      const submittedBy = data.submittedBy;
+      const isAdmin = data.isAdmin;
+      
+      // Validate lock date
+      const lockError = checkLockDate(activities);
+      if (lockError) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: lockError
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      let planSheet = ss.getSheetByName('Planned Activities');
+      if (!planSheet) {
+        planSheet = ss.insertSheet('Planned Activities');
+        planSheet.appendRow(['Plan ID', 'DATE', 'Client Name', 'Project', 'Activity', 'Planned Hours', 'Recurring/Adhoc', 'Submitted At', 'Submitted By', 'Approver', 'Status']);
+        planSheet.getRange(planSheet.getLastRow(), 1, 1, 11).setWrap(true);
+        
+        const headerRange = planSheet.getRange(1, 1, 1, 11);
+        headerRange.setFontWeight('bold');
+        headerRange.setBackground('#9c27b0');
+        headerRange.setFontColor('#ffffff');
+        planSheet.autoResizeColumns(1, 11);
+      }
+      
+      const planId = 'PLAN-' + Date.now();
+      const submittedAt = new Date().toLocaleString();
+      
+      for (let activity of activities) {
+        const status = isAdmin ? 'Approved' : 'Pending';
+        
+        planSheet.appendRow([
+          planId,
+          activity.date,
+          activity.clientName,
+          activity.project,
+          activity.activity,
+          parseFloat(activity.plannedHours || 0),
+          activity.type,
+          submittedAt,
+          submittedBy,
+          activity.adminAssigned,
+          status
+        ]);
+        planSheet.getRange(planSheet.getLastRow(), 1, 1, 11).setWrap(true);
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: isAdmin ? `Plan submitted! ${activities.length} ${activities.length === 1 ? 'entry' : 'entries'} saved.` : `Plan submitted for approval! ${activities.length} ${activities.length === 1 ? 'entry' : 'entries'} sent.`
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle APPROVE PLAN
+    if (data.action === 'approvePlan') {
+      const planId = data.planId;
+      const rowIndices = data.rowIndices; // optional: specific rows to approve
+      
+      let planSheet = ss.getSheetByName('Planned Activities');
+      if (!planSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Sheet not found'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = planSheet.getLastRow();
+      const allData = planSheet.getRange(2, 1, lastRow - 1, 11).getValues();
+      
+      let approvedCount = 0;
+      
+      for (let i = 0; i < allData.length; i++) {
+        const rowPlanId = String(allData[i][0]);
+        const rowStatus = String(allData[i][10]).trim();
+        
+        // If rowIndices provided, only approve those specific rows
+        if (rowIndices && rowIndices.length > 0) {
+          if (rowIndices.includes(i + 2) && rowStatus === 'Pending') {
+            planSheet.getRange(i + 2, 11).setValue('Approved');
+            planSheet.getRange(i + 2, 1, 1, 11).setWrap(true);
+            approvedCount++;
+          }
+        } else if (rowPlanId === planId && rowStatus === 'Pending') {
+          planSheet.getRange(i + 2, 11).setValue('Approved');
+          planSheet.getRange(i + 2, 1, 1, 11).setWrap(true);
+          approvedCount++;
         }
-
-        function formatDateForInput(dateString) {
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: `Approved ${approvedCount} planned ${approvedCount === 1 ? 'entry' : 'entries'}!`
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle REJECT PLAN
+    if (data.action === 'rejectPlan') {
+      const planId = data.planId;
+      const rowIndices = data.rowIndices; // optional: specific rows to reject
+      
+      let planSheet = ss.getSheetByName('Planned Activities');
+      if (!planSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Sheet not found'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = planSheet.getLastRow();
+      const allData = planSheet.getRange(2, 1, lastRow - 1, 11).getValues();
+      
+      let rejectedCount = 0;
+      
+      // Delete from bottom to top
+      for (let i = allData.length - 1; i >= 0; i--) {
+        const rowPlanId = String(allData[i][0]);
+        const rowStatus = String(allData[i][10]).trim();
+        
+        if (rowIndices && rowIndices.length > 0) {
+          if (rowIndices.includes(i + 2) && rowStatus === 'Pending') {
+            planSheet.deleteRow(i + 2);
+            rejectedCount++;
+          }
+        } else if (rowPlanId === planId && rowStatus === 'Pending') {
+          planSheet.deleteRow(i + 2);
+          rejectedCount++;
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: `Rejected and deleted ${rejectedCount} planned ${rejectedCount === 1 ? 'entry' : 'entries'}!`
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle EDIT PLAN ITEM (Admin can edit any field)
+    if (data.action === 'editPlanItem') {
+      const rowIndex = data.rowIndex;
+      const updates = data.updates; // { date, client, project, activity, plannedHours, type }
+      
+      let planSheet = ss.getSheetByName('Planned Activities');
+      if (!planSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Sheet not found'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      if (updates.date) planSheet.getRange(rowIndex, 2).setValue(updates.date);
+      if (updates.client) planSheet.getRange(rowIndex, 3).setValue(updates.client);
+      if (updates.project) planSheet.getRange(rowIndex, 4).setValue(updates.project);
+      if (updates.activity) planSheet.getRange(rowIndex, 5).setValue(updates.activity);
+      if (updates.plannedHours !== undefined) planSheet.getRange(rowIndex, 6).setValue(parseFloat(updates.plannedHours));
+      if (updates.type) planSheet.getRange(rowIndex, 7).setValue(updates.type);
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Plan item updated!'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle SUBMIT FOR APPROVAL
+    if (data.action === 'submitForApproval') {
+      const activities = data.activities;
+      const submittedBy = data.submittedBy;
+      
+      // Validate lock date
+      const lockError = checkLockDate(activities);
+      if (lockError) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: lockError
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      let pendingSheet = ss.getSheetByName('Pending Approvals');
+      if (!pendingSheet) {
+        pendingSheet = ss.insertSheet('Pending Approvals');
+        // Updated: 16 columns with Actual Activity
+        pendingSheet.appendRow(['Submission ID', 'DATE', 'Client Name', 'Project', 'Activity', 'Actual Activity', 'Planned Hours', 'Clockify Hours', 'Effective Hours', 'Billed Hours', 'Recurring/Adhoc', 'Submitted By', 'Submitted At', 'Plan Row Index', 'Approver', 'Status']);
+        pendingSheet.getRange(pendingSheet.getLastRow(), 1, 1, 16).setWrap(true);
+        
+        const headerRange = pendingSheet.getRange(1, 1, 1, 16);
+        headerRange.setFontWeight('bold');
+        headerRange.setBackground('#ff9800');
+        headerRange.setFontColor('#ffffff');
+        pendingSheet.autoResizeColumns(1, 16);
+      }
+      
+      const submissionId = 'SUB-' + Date.now();
+      const submittedAt = new Date().toLocaleString();
+      
+      for (let activity of activities) {
+        pendingSheet.appendRow([
+          submissionId,
+          activity.date,
+          activity.clientName,
+          activity.project,
+          activity.activity,
+          activity.actualActivity || '',
+          parseFloat(activity.plannedHours || 0),
+          parseFloat(activity.clockifyHours),
+          parseFloat(activity.effectiveHours),
+          parseFloat(activity.billedHours),
+          activity.type,
+          submittedBy,
+          submittedAt,
+          activity.planRowIndex || '',
+          activity.adminAssigned,
+          'Pending'
+        ]);
+        pendingSheet.getRange(pendingSheet.getLastRow(), 1, 1, 16).setWrap(true);
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: `Submitted ${activities.length} ${activities.length === 1 ? 'entry' : 'entries'} for approval!`
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle APPROVE SUBMISSION (supports single-item via rowIndices)
+    if (data.action === 'approveSubmission') {
+      const submissionId = data.submissionId;
+      const rowIndices = data.rowIndices; // optional: specific rows to approve
+      
+      let pendingSheet = ss.getSheetByName('Pending Approvals');
+      if (!pendingSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Sheet not found'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = pendingSheet.getLastRow();
+      const allData = pendingSheet.getRange(2, 1, lastRow - 1, 16).getValues();
+      
+      let approvedCount = 0;
+      let submittedByUser = '';
+      let planRowsToDelete = [];
+      
+      for (let i = 0; i < allData.length; i++) {
+        const rowSubmissionId = String(allData[i][0]);
+        const rowStatus = String(allData[i][15]).trim();
+        
+        let shouldApprove = false;
+        if (rowIndices && rowIndices.length > 0) {
+          shouldApprove = rowIndices.includes(i + 2) && rowStatus === 'Pending';
+        } else {
+          shouldApprove = rowSubmissionId === submissionId && rowStatus === 'Pending';
+        }
+        
+        if (shouldApprove) {
+          pendingSheet.getRange(i + 2, 16).setValue('Approved');
+          pendingSheet.getRange(i + 2, 1, 1, 16).setWrap(true);
+          
+          const clientName = String(allData[i][2]);
+          submittedByUser = String(allData[i][11]).trim();
+          const planRowIndex = allData[i][13];
+          
+          if (planRowIndex) {
+            planRowsToDelete.push(parseInt(planRowIndex));
+          }
+          
+          let sheet = ss.getSheetByName(clientName);
+          
+          if (!sheet) {
+            sheet = ss.insertSheet(clientName);
+            sheet.appendRow(['DATE', 'Client Name', 'Project', 'Activity', 'Actual Activity', 'Planned Hours', 'Clockify Hours', 'Effective Hours', 'Billed Hours', 'Recurring/Adhoc', 'User', 'Timestamp']);
+            sheet.getRange(sheet.getLastRow(), 1, 1, 12).setWrap(true);
+            
+            const headerRange = sheet.getRange(1, 1, 1, 12);
+            headerRange.setFontWeight('bold');
+            headerRange.setBackground('#4285f4');
+            headerRange.setFontColor('#ffffff');
+            sheet.autoResizeColumns(1, 12);
+          }
+          
+          sheet.appendRow([
+            allData[i][1],   // date
+            allData[i][2],   // client
+            allData[i][3],   // project
+            allData[i][4],   // activity
+            allData[i][5],   // actual activity
+            allData[i][6],   // planned hours
+            allData[i][7],   // clockify hours
+            allData[i][8],   // effective hours
+            allData[i][9],   // billed hours
+            allData[i][10],  // type
+            allData[i][11],  // submitted by
+            new Date().toLocaleString()  // timestamp
+          ]);
+          sheet.getRange(sheet.getLastRow(), 1, 1, 12).setWrap(true);
+          
+          approvedCount++;
+        }
+      }
+      
+      // Delete specific plan rows that were submitted
+      if (planRowsToDelete.length > 0) {
+        let planSheet = ss.getSheetByName('Planned Activities');
+        if (planSheet) {
+          // Sort descending to delete from bottom up
+          planRowsToDelete.sort((a, b) => b - a);
+          for (let rowIdx of planRowsToDelete) {
             try {
-                if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString;
-                let date = new Date(dateString);
-                if (isNaN(date.getTime())) {
-                    const parts = dateString.split('/');
-                    if (parts.length === 3) {
-                        date = new Date(parts[2], parts[0] - 1, parts[1]);
-                        if (isNaN(date.getTime())) date = new Date(parts[2], parts[1] - 1, parts[0]);
-                    }
-                }
-                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-            } catch (error) {
-                return new Date().toISOString().split('T')[0];
+              planSheet.deleteRow(rowIdx);
+            } catch(e) {
+              // row may already be deleted
             }
+          }
         }
-
-        function lockPlanFields(row, planId) {
-            row.style.backgroundColor = '#f3e5f5';
-            row.dataset.planId = planId;
-            row.dataset.isLocked = 'true';
-            
-            row.querySelector('.row-date').disabled = true;
-            row.querySelector('.row-client').disabled = true;
-            row.querySelector('.row-project').disabled = true;
-            row.querySelector('.row-planned').disabled = true;
-            row.querySelector('.row-admin').disabled = true;
-            row.querySelector('.row-type').disabled = true;
-            row.querySelector('.row-user').disabled = true;
-            
-            ['row-date','row-client','row-project','row-activity','row-planned'].forEach(cls => {
-                const el = row.querySelector('.' + cls);
-                if (el) el.title = '🔒 Locked - From approved plan';
-            });
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: `Approved ${approvedCount} ${approvedCount === 1 ? 'entry' : 'entries'}!`
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle REJECT SUBMISSION (supports single-item via rowIndices)
+    if (data.action === 'rejectSubmission') {
+      const submissionId = data.submissionId;
+      const rowIndices = data.rowIndices;
+      
+      let pendingSheet = ss.getSheetByName('Pending Approvals');
+      if (!pendingSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Sheet not found'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const lastRow = pendingSheet.getLastRow();
+      const allData = pendingSheet.getRange(2, 1, lastRow - 1, 16).getValues();
+      
+      let rejectedCount = 0;
+      
+      for (let i = 0; i < allData.length; i++) {
+        const rowSubmissionId = String(allData[i][0]);
+        const rowStatus = String(allData[i][15]).trim();
+        
+        let shouldReject = false;
+        if (rowIndices && rowIndices.length > 0) {
+          shouldReject = rowIndices.includes(i + 2) && rowStatus === 'Pending';
+        } else {
+          shouldReject = rowSubmissionId === submissionId && rowStatus === 'Pending';
         }
-
-        // ===================== TOTALS & SUBMISSION MODE =====================
-        function updateTotals() {
-            const tbody = document.getElementById('dataTableBody');
-            const rows = tbody.querySelectorAll('tr');
-            
-            let totalPlanned = 0, totalClockify = 0, totalEffective = 0, totalBilled = 0;
-            
-            rows.forEach((row) => {
-                totalPlanned += parseFloat(row.querySelector('.row-planned')?.value || 0);
-                totalClockify += parseFloat(row.querySelector('.row-clockify')?.value || 0);
-                totalEffective += parseFloat(row.querySelector('.row-effective')?.value || 0);
-                totalBilled += parseFloat(row.querySelector('.row-billed')?.value || 0);
-            });
-            
-            document.getElementById('totalPlannedHours').textContent = totalPlanned.toFixed(2);
-            document.getElementById('totalClockifyHours').textContent = totalClockify.toFixed(2);
-            document.getElementById('totalEffectiveHours').textContent = totalEffective.toFixed(2);
-            document.getElementById('totalBilledHours').textContent = totalBilled.toFixed(2);
-            
-            const percentage = totalClockify > 0 ? ((totalEffective / totalClockify) * 100).toFixed(0) : 0;
-            document.getElementById('effectivePercentage').textContent = percentage;
-            checkSubmissionMode();
+        
+        if (shouldReject) {
+          pendingSheet.getRange(i + 2, 16).setValue('Rejected');
+          pendingSheet.getRange(i + 2, 1, 1, 16).setWrap(true);
+          rejectedCount++;
         }
-
-        function checkSubmissionMode() {
-            const tbody = document.getElementById('dataTableBody');
-            const rows = tbody.querySelectorAll('tr');
-            
-            if (rows.length === 0) {
-                document.getElementById('submitBtn').classList.add('hidden');
-                document.getElementById('submitForApprovalBtn').classList.add('hidden');
-                document.getElementById('submitPlanBtn').classList.add('hidden');
-                return;
-            }
-            
-            let hasEmptyHours = false, hasFilledHours = false;
-            
-            rows.forEach(row => {
-                const clockify = row.querySelector('.row-clockify')?.value || '';
-                const effective = row.querySelector('.row-effective')?.value || '';
-                const billed = row.querySelector('.row-billed')?.value || '';
-                
-                if (clockify === '' && effective === '' && billed === '') hasEmptyHours = true;
-                else hasFilledHours = true;
-            });
-            
-            if (currentUserRole === 'admin') {
-                document.getElementById('reportBtn').classList.remove('hidden');
-                document.getElementById('submitBtn').classList.toggle('hidden', !(hasFilledHours));
-                document.getElementById('submitPlanBtn').classList.toggle('hidden', !(hasEmptyHours && !hasFilledHours));
-                document.getElementById('submitForApprovalBtn').classList.add('hidden');
-            } else {
-                document.getElementById('submitForApprovalBtn').classList.toggle('hidden', !(hasFilledHours));
-                document.getElementById('submitPlanBtn').classList.toggle('hidden', !(hasEmptyHours && !hasFilledHours));
-                document.getElementById('submitBtn').classList.add('hidden');
-            }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: `Rejected ${rejectedCount} ${rejectedCount === 1 ? 'entry' : 'entries'}!`
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle EDIT PENDING ITEM (Admin can edit any pending approval field)
+    if (data.action === 'editPendingItem') {
+      const rowIndex = data.rowIndex;
+      const updates = data.updates;
+      
+      let pendingSheet = ss.getSheetByName('Pending Approvals');
+      if (!pendingSheet) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'Sheet not found'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      // Column mapping for Pending Approvals:
+      // 1:SubmissionID, 2:DATE, 3:Client, 4:Project, 5:Activity, 6:ActualActivity
+      // 7:Planned, 8:Clockify, 9:Effective, 10:Billed, 11:Type, 12:SubmittedBy, 13:SubmittedAt, 14:PlanRowIndex, 15:Approver, 16:Status
+      if (updates.date) pendingSheet.getRange(rowIndex, 2).setValue(updates.date);
+      if (updates.client) pendingSheet.getRange(rowIndex, 3).setValue(updates.client);
+      if (updates.project) pendingSheet.getRange(rowIndex, 4).setValue(updates.project);
+      if (updates.activity) pendingSheet.getRange(rowIndex, 5).setValue(updates.activity);
+      if (updates.actualActivity !== undefined) pendingSheet.getRange(rowIndex, 6).setValue(updates.actualActivity);
+      if (updates.plannedHours !== undefined) pendingSheet.getRange(rowIndex, 7).setValue(parseFloat(updates.plannedHours));
+      if (updates.clockifyHours !== undefined) pendingSheet.getRange(rowIndex, 8).setValue(parseFloat(updates.clockifyHours));
+      if (updates.effectiveHours !== undefined) pendingSheet.getRange(rowIndex, 9).setValue(parseFloat(updates.effectiveHours));
+      if (updates.billedHours !== undefined) pendingSheet.getRange(rowIndex, 10).setValue(parseFloat(updates.billedHours));
+      if (updates.type) pendingSheet.getRange(rowIndex, 11).setValue(updates.type);
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'Item updated!'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Handle SUBMIT ACTIVITIES (Admin Direct Submit)
+    if (data.action === 'submitActivities') {
+      const activities = data.activities;
+      const submittedBy = data.submittedBy || 'Unknown';
+      
+      // Validate lock date
+      const lockError = checkLockDate(activities);
+      if (lockError) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: lockError
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      let planRowsToDelete = [];
+      
+      for (let activity of activities) {
+        const clientName = activity.clientName;
+        
+        let sheet = ss.getSheetByName(clientName);
+        if (!sheet) {
+          sheet = ss.insertSheet(clientName);
+          sheet.appendRow(['DATE', 'Client Name', 'Project', 'Activity', 'Actual Activity', 'Planned Hours', 'Clockify Hours', 'Effective Hours', 'Billed Hours', 'Recurring/Adhoc', 'User', 'Timestamp']);
+          sheet.getRange(sheet.getLastRow(), 1, 1, 12).setWrap(true);
+          
+          const headerRange = sheet.getRange(1, 1, 1, 12);
+          headerRange.setFontWeight('bold');
+          headerRange.setBackground('#4285f4');
+          headerRange.setFontColor('#ffffff');
+          sheet.autoResizeColumns(1, 12);
         }
-
-        // ===================== REVIEW MODAL =====================
-        function showReviewModal(activities, submissionType) {
-            pendingActivities = activities;
-            pendingSubmissionType = submissionType;
-            
-            document.getElementById('reviewTotalEntries').textContent = activities.length;
-            
-            let totalClockify = 0, totalEffective = 0, totalBilled = 0;
-            activities.forEach(a => {
-                totalClockify += parseFloat(a.clockifyHours);
-                totalEffective += parseFloat(a.effectiveHours);
-                totalBilled += parseFloat(a.billedHours);
-            });
-            
-            document.getElementById('reviewTotalClockify').textContent = totalClockify.toFixed(2);
-            document.getElementById('reviewTotalEffective').textContent = totalEffective.toFixed(2);
-            document.getElementById('reviewTotalBilled').textContent = totalBilled.toFixed(2);
-            document.getElementById('reviewPercentage').textContent = totalClockify > 0 ? ((totalEffective / totalClockify) * 100).toFixed(0) : 0;
-            
-            const adminColumnHeader = document.getElementById('adminColumnHeader');
-            adminColumnHeader.classList.toggle('hidden', submissionType !== 'approval');
-            
-            const tbody = document.getElementById('reviewTableBody');
-            tbody.innerHTML = '';
-            
-            activities.forEach((a, index) => {
-                const row = document.createElement('tr');
-                row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-                let adminCell = submissionType === 'approval' ? `<td class="border border-gray-300 p-2 text-sm">${a.adminAssigned || '-'}</td>` : '';
-                
-                row.innerHTML = `
-                    <td class="border border-gray-300 p-2 text-sm font-semibold">${index + 1}</td>
-                    <td class="border border-gray-300 p-2 text-sm">${a.date}</td>
-                    <td class="border border-gray-300 p-2 text-sm">${a.clientName}</td>
-                    <td class="border border-gray-300 p-2 text-sm">${a.project}</td>
-                    <td class="border border-gray-300 p-2 text-sm max-w-xs" title="${a.activity}">${a.activity}</td>
-                    <td class="border border-gray-300 p-2 text-sm max-w-xs" title="${a.actualActivity || ''}">${a.actualActivity || '-'}</td>
-                    <td class="border border-gray-300 p-2 text-sm text-center">${a.plannedHours}h</td>
-                    <td class="border border-gray-300 p-2 text-sm text-center font-semibold text-purple-600">${a.clockifyHours}h</td>
-                    <td class="border border-gray-300 p-2 text-sm text-center font-semibold text-green-600">${a.effectiveHours}h</td>
-                    <td class="border border-gray-300 p-2 text-sm text-center font-semibold text-orange-600">${a.billedHours}h</td>
-                    <td class="border border-gray-300 p-2 text-sm"><span class="px-2 py-1 rounded text-xs ${a.type === 'Recurring' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}">${a.type}</span></td>
-                    ${adminCell}
-                `;
-                tbody.appendChild(row);
-            });
-            
-            document.getElementById('reviewModal').classList.remove('hidden');
+        
+        sheet.appendRow([
+          activity.date,
+          activity.clientName,
+          activity.project,
+          activity.activity,
+          activity.actualActivity || '',
+          parseFloat(activity.plannedHours || 0),
+          parseFloat(activity.clockifyHours),
+          parseFloat(activity.effectiveHours),
+          parseFloat(activity.billedHours),
+          activity.type,
+          activity.user,
+          new Date().toLocaleString()
+        ]);
+        sheet.getRange(sheet.getLastRow(), 1, 1, 12).setWrap(true);
+        
+        // Track plan rows to delete
+        if (activity.planRowIndex) {
+          planRowsToDelete.push(parseInt(activity.planRowIndex));
         }
-
-        document.getElementById('cancelReviewBtn').addEventListener('click', () => {
-            document.getElementById('reviewModal').classList.add('hidden');
-            pendingActivities = [];
-            pendingSubmissionType = null;
-        });
-
-        document.getElementById('confirmSubmitBtn').addEventListener('click', async () => {
-            const confirmBtn = document.getElementById('confirmSubmitBtn');
-            const cancelBtn = document.getElementById('cancelReviewBtn');
-            
-            confirmBtn.disabled = true;
-            cancelBtn.disabled = true;
-            confirmBtn.textContent = 'Submitting...';
-            
+      }
+      
+      // Delete specific approved plan rows
+      if (planRowsToDelete.length > 0) {
+        let planSheet = ss.getSheetByName('Planned Activities');
+        if (planSheet) {
+          planRowsToDelete.sort((a, b) => b - a);
+          for (let rowIdx of planRowsToDelete) {
             try {
-                let action, postData;
-                
-                if (pendingSubmissionType === 'approval') {
-                    postData = { action: 'submitForApproval', activities: pendingActivities, submittedBy: currentUser };
-                } else {
-                    postData = { action: 'submitActivities', activities: pendingActivities, submittedBy: currentUser };
-                }
-                
-                await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST', mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(postData)
-                });
-
-                document.getElementById('reviewModal').classList.add('hidden');
-                showStatus(`✅ Successfully submitted ${pendingActivities.length} ${pendingActivities.length === 1 ? 'entry' : 'entries'}!`, 'green');
-                
-                // Remove submitted rows from table
-                removeSubmittedRows();
-                
-            } catch (error) {
-                showStatus('❌ Error: ' + error.message, 'red');
-            } finally {
-                confirmBtn.disabled = false;
-                cancelBtn.disabled = false;
-                confirmBtn.textContent = '✓ Confirm & Submit';
-                pendingActivities = [];
-                pendingSubmissionType = null;
-            }
-        });
-
-        function removeSubmittedRows() {
-            // If we submitted selected rows, only remove those. Otherwise clear all.
-            const selectedIds = getSelectedRowIds();
-            
-            if (selectedIds.length > 0) {
-                selectedIds.forEach(rowId => {
-                    const row = document.getElementById(`row-${rowId}`);
-                    if (row) row.remove();
-                });
-                document.getElementById('selectAllCheckbox').checked = false;
-                updateSelectionBar();
-            } else {
-                localStorage.removeItem('savedTimesheet_' + currentUser);
-                document.getElementById('dataTableBody').innerHTML = '';
-                rowCounter = 0;
-                addNewRow();
-            }
-            updateTotals();
+              planSheet.deleteRow(rowIdx);
+            } catch(e) {}
+          }
         }
-
-        // ===================== AUTH =====================
-        window.addEventListener('load', async () => {
-            const savedUser = sessionStorage.getItem('loggedInUser');
-            const savedRole = sessionStorage.getItem('loggedInUserRole');
-            if (savedUser && savedRole) {
-                currentUser = savedUser;
-                currentUserRole = savedRole;
-                await showMainApp();
-            }
-        });
-
-        document.getElementById('loginBtn').addEventListener('click', async () => {
-            const username = document.getElementById('loginUsername').value.trim();
-            const password = document.getElementById('loginPassword').value.trim();
-            const errorDiv = document.getElementById('loginError');
-            const loginBtn = document.getElementById('loginBtn');
-            
-            if (!username || !password) {
-                errorDiv.textContent = '❌ Please enter both username and password';
-                errorDiv.classList.remove('hidden');
-                return;
-            }
-            
-            loginBtn.disabled = true;
-            loginBtn.textContent = 'Logging in...';
-            errorDiv.classList.add('hidden');
-            
-            try {
-                const url = GOOGLE_SCRIPT_URL + '?action=login&username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password);
-                const response = await fetch(url);
-                const result = JSON.parse(await response.text());
-                
-                if (result.status === 'success') {
-                    currentUser = username;
-                    currentUserRole = result.role || 'data';
-                    sessionStorage.setItem('loggedInUser', username);
-                    sessionStorage.setItem('loggedInUserRole', currentUserRole);
-                    await showMainApp();
-                } else {
-                    errorDiv.textContent = '❌ ' + (result.message || 'Invalid username or password');
-                    errorDiv.classList.remove('hidden');
-                }
-            } catch (error) {
-                errorDiv.textContent = '❌ Login error: ' + error.message;
-                errorDiv.classList.remove('hidden');
-            } finally {
-                loginBtn.disabled = false;
-                loginBtn.textContent = 'Login';
-            }
-        });
-
-        document.getElementById('loginPassword').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') document.getElementById('loginBtn').click();
-        });
-
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            currentUser = null;
-            currentUserRole = null;
-            sessionStorage.removeItem('loggedInUser');
-            sessionStorage.removeItem('loggedInUserRole');
-            document.getElementById('loginPage').classList.remove('hidden');
-            document.getElementById('mainApp').classList.add('hidden');
-            document.getElementById('loginUsername').value = '';
-            document.getElementById('loginPassword').value = '';
-        });
-
-        async function showMainApp() {
-            document.getElementById('loginPage').classList.add('hidden');
-            document.getElementById('mainApp').classList.remove('hidden');
-            document.getElementById('loggedInUser').textContent = currentUser + ' (' + (currentUserRole === 'admin' ? 'Admin' : 'Data User') + ')';
-            
-            await Promise.all([loadClients(), loadProjects(), loadAdminsList()]);
-            
-            if (currentUserRole === 'admin') {
-                document.getElementById('clientMasterSection').classList.remove('hidden');
-                document.getElementById('projectMasterSection').classList.remove('hidden');
-                document.getElementById('approvalDashboard').classList.remove('hidden');
-                document.getElementById('planApprovalDashboard').classList.remove('hidden');
-                document.getElementById('rejectedSubmissionsSection').classList.add('hidden');
-                loadPendingApprovals();
-                loadPendingPlanApprovals();
-            } else {
-                document.getElementById('clientMasterSection').classList.add('hidden');
-                document.getElementById('projectMasterSection').classList.add('hidden');
-                document.getElementById('approvalDashboard').classList.add('hidden');
-                document.getElementById('planApprovalDashboard').classList.add('hidden');
-                document.getElementById('rejectedSubmissionsSection').classList.remove('hidden');
-                loadRejectedSubmissions();
-            }
-            
-            loadSavedProgress();
-            loadApprovedPlans();
-            updateTotals();
-        }
-
-        // ===================== DATA LOADING =====================
-        document.getElementById('testConnectionBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('testConnectionBtn');
-            const resultDiv = document.getElementById('testResult');
-            btn.disabled = true;
-            btn.textContent = 'Testing...';
-            resultDiv.classList.remove('hidden');
-            resultDiv.innerHTML = '🔄 Testing connection...';
-            
-            try {
-                const response = await fetch(GOOGLE_SCRIPT_URL + '?action=getClients');
-                const result = JSON.parse(await response.text());
-                
-                if (result.status === 'success') {
-                    resultDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
-                    resultDiv.innerHTML = `✅ <strong>Connection Successful!</strong>`;
-                } else {
-                    resultDiv.className = 'mt-3 p-3 bg-orange-100 border border-orange-400 text-orange-800 rounded-lg';
-                    resultDiv.innerHTML = `⚠️ <strong>Script Error:</strong> ${result.message}`;
-                }
-            } catch (error) {
-                resultDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-                resultDiv.innerHTML = `❌ <strong>Connection Failed: ${error.message}</strong>`;
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Test Connection';
-            }
-        });
-
-        async function loadClients() {
-            try {
-                const result = JSON.parse(await (await fetch(GOOGLE_SCRIPT_URL + '?action=getClients&t=' + Date.now())).text());
-                if (result.status === 'success') {
-                    clientsList = result.clients || [];
-                    updateClientList();
-                    updateProjectClientSelect();
-                }
-            } catch (error) { console.error('Error loading clients:', error); }
-        }
-
-        async function loadProjects() {
-            try {
-                const result = JSON.parse(await (await fetch(GOOGLE_SCRIPT_URL + '?action=getProjects&t=' + Date.now())).text());
-                if (result.status === 'success') {
-                    projectsMap = result.projects || {};
-                    updateProjectList();
-                }
-            } catch (error) { console.error('Error loading projects:', error); }
-        }
-
-        async function loadAdminsList() {
-            try {
-                const result = await (await fetch(GOOGLE_SCRIPT_URL + '?action=getAdmins')).json();
-                if (result.status === 'success') {
-                    adminsList = result.admins || [];
-                    updateAllAdminDropdowns();
-                }
-            } catch (error) { console.error('Error loading admins:', error); }
-        }
-
-        function updateAllAdminDropdowns() {
-            document.querySelectorAll('.row-admin').forEach(select => {
-                const currentValue = select.value;
-                select.innerHTML = '<option value="">Select Admin...</option>';
-                adminsList.forEach(admin => {
-                    const option = document.createElement('option');
-                    option.value = admin;
-                    option.textContent = admin;
-                    if (admin === currentValue) option.selected = true;
-                    select.appendChild(option);
-                });
-            });
-        }
-
-        function updateClientList() {
-            const div = document.getElementById('clientList');
-            if (clientsList.length === 0) { div.innerHTML = '<span class="text-sm text-gray-500 italic">No clients added yet</span>'; return; }
-            div.innerHTML = clientsList.map(c => `<span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">${c}</span>`).join('');
-        }
-
-        function updateProjectClientSelect() {
-            const select = document.getElementById('projectClientSelect');
-            select.innerHTML = '<option value="">Select Client...</option>';
-            clientsList.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; select.appendChild(o); });
-        }
-
-        function updateProjectList() {
-            const div = document.getElementById('projectList');
-            if (Object.keys(projectsMap).length === 0) { div.innerHTML = '<span class="text-sm text-gray-500 italic">No projects added yet</span>'; return; }
-            let html = '';
-            for (let client in projectsMap) {
-                html += `<div class="bg-white p-3 rounded-lg border border-green-200"><p class="font-semibold text-green-900 mb-2">${client}:</p><div class="flex flex-wrap gap-2">`;
-                projectsMap[client].forEach(p => { html += `<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">${p}</span>`; });
-                html += `</div></div>`;
-            }
-            div.innerHTML = html;
-        }
-
-        // ===================== ROW MANAGEMENT =====================
-        function addNewRow(prefill) {
-            const tbody = document.getElementById('dataTableBody');
-            const rowId = rowCounter++;
-            const row = document.createElement('tr');
-            row.className = 'hover:bg-gray-50';
-            row.id = `row-${rowId}`;
-            const today = new Date().toISOString().split('T')[0];
-            
-            const d = prefill || {};
-            
-            row.innerHTML = `
-                <td class="border border-gray-300 p-2 text-center">
-                    <input type="checkbox" class="row-checkbox w-4 h-4 cursor-pointer" data-row-id="${rowId}" onchange="onRowCheckboxChange(${rowId})">
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" value="${d.date || today}" required>
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required onchange="updateProjectDropdown(${rowId})">
-                        <option value="">Select Client...</option>
-                        ${clientsList.map(c => `<option value="${c}" ${c === (d.client || '') ? 'selected' : ''}>${c}</option>`).join('')}
-                    </select>
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                        ${d.project ? `<option value="${d.project}" selected>${d.project}</option>` : '<option value="">Select Client First...</option>'}
-                    </select>
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="Activity description" required rows="2">${d.activity || ''}</textarea>
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <textarea class="row-actual-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="Actual activity done" rows="2">${d.actualActivity || ''}</textarea>
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" value="${d.planned || ''}" oninput="updateTotals()">
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" value="${d.clockify || ''}" required oninput="updateTotals()">
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" value="${d.effective || ''}" required oninput="updateTotals()">
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <input type="number" class="row-billed w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" value="${d.billed || ''}" required oninput="updateTotals()">
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <select class="row-admin w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                        <option value="">Select Admin...</option>
-                        ${adminsList.map(a => `<option value="${a}" ${a === (d.admin || '') ? 'selected' : ''}>${a}</option>`).join('')}
-                    </select>
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                        <option value="">Select...</option>
-                        <option value="Recurring" ${d.type === 'Recurring' ? 'selected' : ''}>Recurring</option>
-                        <option value="Adhoc" ${d.type === 'Adhoc' ? 'selected' : ''}>Adhoc</option>
-                    </select>
-                </td>
-                <td class="border border-gray-300 p-2">
-                    <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" required>
-                        <option value="${currentUser}" selected>${currentUser}</option>
-                    </select>
-                </td>
-                <td class="border border-gray-300 p-2 text-center">
-                    <button onclick="deleteRow(${rowId})" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Delete</button>
-                </td>
-            `;
-            tbody.appendChild(row);
-            updateTotals();
-            return { rowId, row };
-        }
-
-        window.onRowCheckboxChange = function(rowId) {
-            const row = document.getElementById(`row-${rowId}`);
-            const cb = row.querySelector('.row-checkbox');
-            row.classList.toggle('row-selected', cb.checked);
-            updateSelectionBar();
-        };
-
-        window.updateProjectDropdown = function(rowId) {
-            const row = document.getElementById(`row-${rowId}`);
-            const clientSelect = row.querySelector('.row-client');
-            const projectSelect = row.querySelector('.row-project');
-            const selectedClient = clientSelect.value;
-            
-            if (!selectedClient) { projectSelect.innerHTML = '<option value="">Select Client First...</option>'; return; }
-            
-            const projects = projectsMap[selectedClient] || [];
-            if (projects.length === 0) { projectSelect.innerHTML = '<option value="">No projects for this client</option>'; return; }
-            
-            projectSelect.innerHTML = '<option value="">Select Project...</option>' + projects.map(p => `<option value="${p}">${p}</option>`).join('');
-        };
-
-        window.deleteRow = function(rowId) {
-            const row = document.getElementById(`row-${rowId}`);
-            if (row) {
-                if (row.dataset.isLocked === 'true') { alert('Cannot delete a locked plan row!'); return; }
-                row.remove();
-                approvedPlanRows.delete(rowId);
-                updateTotals();
-                updateSelectionBar();
-            }
-        };
-
-        document.getElementById('addRowBtn').addEventListener('click', () => addNewRow());
-
-        // ===================== LOAD APPROVED PLANS =====================
-        async function loadApprovedPlans() {
-            try {
-                const url = GOOGLE_SCRIPT_URL + '?action=getMyApprovedPlans&username=' + encodeURIComponent(currentUser);
-                const result = await (await fetch(url)).json();
-                
-                if (result.status === 'success' && result.plans.length > 0) {
-                    const tbody = document.getElementById('dataTableBody');
-                    
-                    result.plans.forEach(plan => {
-                        const rowId = rowCounter++;
-                        const row = document.createElement('tr');
-                        row.className = 'hover:bg-purple-50';
-                        row.id = `row-${rowId}`;
-                        row.dataset.planRowIndex = plan.rowIndex || '';
-                        
-                        row.innerHTML = `
-                            <td class="border border-gray-300 p-2 text-center">
-                                <input type="checkbox" class="row-checkbox w-4 h-4 cursor-pointer" data-row-id="${rowId}" onchange="onRowCheckboxChange(${rowId})">
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <input type="date" class="row-date w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" value="${formatDateForInput(plan.date)}" required>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <select class="row-client w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" required>
-                                    <option value="${plan.client}" selected>${plan.client}</option>
-                                </select>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <select class="row-project w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" required>
-                                    <option value="${plan.project}" selected>${plan.project}</option>
-                                </select>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <textarea class="row-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px] bg-gray-100" required rows="2" readonly>${plan.activity}</textarea>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <textarea class="row-actual-activity w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded resize-y min-h-[60px]" placeholder="What was actually done" rows="2"></textarea>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <input type="number" class="row-planned w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" step="0.25" min="0" value="${plan.plannedHours}" disabled oninput="updateTotals()">
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <input type="number" class="row-clockify w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <input type="number" class="row-effective w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <input type="number" class="row-billed w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded" step="0.25" min="0" placeholder="0.0" required oninput="updateTotals()">
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <select class="row-admin w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" disabled required>
-                                    <option value="${plan.admin}" selected>${plan.admin}</option>
-                                </select>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <select class="row-type w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" disabled required>
-                                    <option value="${plan.type || 'Recurring'}" selected>${plan.type || 'Recurring'}</option>
-                                </select>
-                            </td>
-                            <td class="border border-gray-300 p-2">
-                                <select class="row-user w-full p-2 border-0 focus:ring-2 focus:ring-blue-500 rounded bg-gray-100" disabled required>
-                                    <option value="${currentUser}" selected>${currentUser}</option>
-                                </select>
-                            </td>
-                            <td class="border border-gray-300 p-2 text-center">
-                                <button onclick="deleteRow(${rowId})" class="bg-gray-400 text-white px-3 py-1 rounded text-sm cursor-not-allowed" disabled>🔒</button>
-                            </td>
-                        `;
-                        tbody.appendChild(row);
-                        lockPlanFields(row, plan.planId);
-                        approvedPlanRows.add(rowId);
-                    });
-                    
-                    updateTotals();
-                    showStatus(`📅 Loaded ${result.plans.length} approved plan(s). Fill in actual hours and submit.`, 'purple');
-                }
-            } catch (error) { console.error('Error loading approved plans:', error); }
-        }
-
-        // ===================== SAVE / LOAD PROGRESS =====================
-        document.getElementById('saveProgressBtn').addEventListener('click', () => {
-            const tbody = document.getElementById('dataTableBody');
-            const rows = tbody.querySelectorAll('tr');
-            
-            if (rows.length === 0) { showStatus('❌ No entries to save!', 'red'); return; }
-
-            const savedData = [];
-            rows.forEach((row) => {
-                if (row.dataset.isLocked === 'true') return; // skip locked rows
-                savedData.push({
-                    date: row.querySelector('.row-date').value,
-                    client: row.querySelector('.row-client').value,
-                    project: row.querySelector('.row-project').value,
-                    activity: row.querySelector('.row-activity').value,
-                    actualActivity: row.querySelector('.row-actual-activity')?.value || '',
-                    planned: row.querySelector('.row-planned').value,
-                    clockify: row.querySelector('.row-clockify').value,
-                    effective: row.querySelector('.row-effective').value,
-                    billed: row.querySelector('.row-billed').value,
-                    admin: row.querySelector('.row-admin').value,
-                    type: row.querySelector('.row-type').value,
-                    user: row.querySelector('.row-user').value
-                });
-            });
-
-            localStorage.setItem('savedTimesheet_' + currentUser, JSON.stringify(savedData));
-            showStatus(`💾 Progress saved! ${savedData.length} ${savedData.length === 1 ? 'entry' : 'entries'} saved locally.`, 'purple');
-        });
-
-        function loadSavedProgress() {
-            const tbody = document.getElementById('dataTableBody');
-            tbody.innerHTML = '';
-            rowCounter = 0;
-            
-            const savedData = localStorage.getItem('savedTimesheet_' + currentUser);
-            if (!savedData) { addNewRow(); return; }
-            
-            try {
-                const rows = JSON.parse(savedData);
-                let loadedCount = 0;
-                
-                rows.forEach((d) => {
-                    if (d.user === currentUser) {
-                        addNewRow(d);
-                        loadedCount++;
-                    }
-                });
-                
-                if (loadedCount > 0) {
-                    showStatus(`📂 Restored ${loadedCount} saved ${loadedCount === 1 ? 'entry' : 'entries'}`, 'blue');
-                } else {
-                    addNewRow();
-                }
-                
-                updateTotals();
-            } catch (e) { console.error('Error loading saved progress:', e); addNewRow(); }
-        }
-
-        // ===================== SUBMIT PLAN =====================
-        async function submitPlanActivities(activities) {
-            const submitBtn = document.getElementById('submitPlanBtn');
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Submitting Plan...';
-            
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST', mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'submitPlan',
-                        activities: activities,
-                        submittedBy: currentUser,
-                        isAdmin: currentUserRole === 'admin'
-                    })
-                });
-
-                const msg = currentUserRole === 'admin' 
-                    ? `✅ Plan submitted and approved! ${activities.length} entries saved.`
-                    : `✅ Plan submitted for approval! ${activities.length} entries sent to admin.`;
-                showStatus(msg, 'green');
-                
-                removeSubmittedRows();
-                
-            } catch (error) {
-                showStatus('❌ Error: ' + error.message, 'red');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = '📅 Submit All as Plan';
-            }
-        }
-
-        document.getElementById('submitPlanBtn').addEventListener('click', async () => {
-            const tbody = document.getElementById('dataTableBody');
-            const rows = tbody.querySelectorAll('tr');
-            
-            if (rows.length === 0) { showStatus('❌ No entries to submit!', 'red'); return; }
-
-            const activities = [];
-            let hasError = false;
-            
-            rows.forEach((row) => {
-                if (row.dataset.isLocked === 'true') return;
-                
-                const clockify = row.querySelector('.row-clockify').value;
-                const effective = row.querySelector('.row-effective').value;
-                const billed = row.querySelector('.row-billed').value;
-                
-                if (clockify !== '' || effective !== '' || billed !== '') {
-                    showStatus('❌ Plan submission should not include actual hours. Leave Clockify, Effective, and Billed hours empty.', 'red');
-                    hasError = true;
-                    return;
-                }
-                
-                const date = row.querySelector('.row-date').value;
-                const client = row.querySelector('.row-client').value;
-                const project = row.querySelector('.row-project').value;
-                const activity = row.querySelector('.row-activity').value;
-                const planned = row.querySelector('.row-planned').value;
-                const admin = row.querySelector('.row-admin').value;
-                const type = row.querySelector('.row-type').value;
-                const user = row.querySelector('.row-user').value;
-                
-                if (!date || !client || !project || !activity || !planned || !admin || !type || !user) {
-                    hasError = true;
-                    row.classList.add('bg-red-50');
-                } else {
-                    row.classList.remove('bg-red-50');
-                    activities.push({ date, clientName: client, project, activity, plannedHours: planned, adminAssigned: admin, type, user });
-                }
-            });
-            
-            if (hasError) return;
-            submitPlanActivities(activities);
-        });
-
-        // ===================== SUBMIT HOURS (ALL) =====================
-        document.getElementById('submitForApprovalBtn').addEventListener('click', async () => {
-            const activities = collectAllHoursRows();
-            if (!activities) return;
-            showReviewModal(activities, 'approval');
-        });
-
-        document.getElementById('submitBtn').addEventListener('click', async () => {
-            const activities = collectAllHoursRows();
-            if (!activities) return;
-            showReviewModal(activities, 'admin');
-        });
-
-        function collectAllHoursRows() {
-            const tbody = document.getElementById('dataTableBody');
-            const rows = tbody.querySelectorAll('tr');
-            
-            if (rows.length === 0) { showStatus('❌ No entries to submit!', 'red'); return null; }
-
-            const activities = [];
-            let hasError = false;
-            
-            rows.forEach((row) => {
-                const date = row.querySelector('.row-date').value;
-                const client = row.querySelector('.row-client').value;
-                const project = row.querySelector('.row-project').value;
-                const activity = row.querySelector('.row-activity').value;
-                const actualActivity = row.querySelector('.row-actual-activity')?.value || '';
-                const planned = row.querySelector('.row-planned').value;
-                const clockify = row.querySelector('.row-clockify').value;
-                const effective = row.querySelector('.row-effective').value;
-                const billed = row.querySelector('.row-billed').value;
-                const admin = row.querySelector('.row-admin').value;
-                const type = row.querySelector('.row-type').value;
-                const user = row.querySelector('.row-user').value;
-                const planRowIndex = row.dataset.planRowIndex || '';
-                
-                if (!date || !client || !project || !activity || !clockify || !effective || !billed || !type || !user) {
-                    hasError = true;
-                    row.classList.add('bg-red-50');
-                } else {
-                    row.classList.remove('bg-red-50');
-                    activities.push({
-                        date, clientName: client, project, activity, actualActivity,
-                        plannedHours: planned || '0',
-                        clockifyHours: clockify, effectiveHours: effective, billedHours: billed,
-                        adminAssigned: admin, type, user, planRowIndex
-                    });
-                }
-            });
-            
-            if (hasError) {
-                showStatus('❌ Please fill in all required fields!', 'red');
-                return null;
-            }
-            return activities;
-        }
-
-        // ===================== PLAN APPROVALS (Admin) =====================
-        async function loadPendingPlanApprovals() {
-            try {
-                const result = await (await fetch(GOOGLE_SCRIPT_URL + '?action=getPendingPlanApprovals&approver=' + encodeURIComponent(currentUser))).json();
-                if (result.status === 'success') displayPlanApprovals(result.approvals);
-            } catch (error) { console.error('Error loading plan approvals:', error); }
-        }
-
-        function displayPlanApprovals(approvals) {
-            const listDiv = document.getElementById('planApprovalsList');
-            
-            if (approvals.length === 0) {
-                listDiv.innerHTML = '<p class="text-sm text-gray-600 italic">No pending plan approvals</p>';
-                return;
-            }
-            
-            // Group by planId
-            const grouped = {};
-            approvals.forEach(a => {
-                if (!grouped[a.planId]) grouped[a.planId] = [];
-                grouped[a.planId].push(a);
-            });
-            
-            let html = '';
-            for (let planId in grouped) {
-                const items = grouped[planId];
-                const firstItem = items[0];
-                
-                html += `<div class="bg-white p-4 mb-4 rounded-lg border border-purple-300 shadow-sm">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <p class="font-semibold text-gray-800">From: ${firstItem.submittedBy}</p>
-                            <p class="text-sm text-gray-600">Submitted: ${firstItem.submittedAt}</p>
-                            <p class="text-sm text-gray-600">${items.length} planned activities</p>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="approveSelectedPlanItems('${planId}')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm">✓ Approve Selected</button>
-                            <button onclick="approvePlan('${planId}')" class="bg-green-700 hover:bg-green-800 text-white px-3 py-2 rounded text-sm">✓ Approve All</button>
-                            <button onclick="rejectSelectedPlanItems('${planId}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-sm">✗ Reject Selected</button>
-                            <button onclick="rejectPlan('${planId}')" class="bg-red-700 hover:bg-red-800 text-white px-3 py-2 rounded text-sm">✗ Reject All</button>
-                        </div>
-                    </div>
-                    <div class="text-sm">
-                        <table class="w-full border-collapse">
-                            <thead><tr class="bg-gray-50">
-                                <th class="p-2 text-left"><input type="checkbox" class="plan-select-all" data-plan-id="${planId}" onchange="togglePlanSelectAll('${planId}')"></th>
-                                <th class="p-2 text-left">Date</th><th class="p-2 text-left">Client/Project</th>
-                                <th class="p-2 text-left">Activity</th><th class="p-2 text-left">Hours</th><th class="p-2 text-left">Type</th>
-                                <th class="p-2 text-left">Action</th>
-                            </tr></thead><tbody>`;
-                
-                items.forEach((item, idx) => {
-                    html += `<tr class="border-t">
-                        <td class="p-2"><input type="checkbox" class="plan-item-cb" data-plan-id="${planId}" data-row-index="${item.rowIndex}" value="${item.rowIndex}"></td>
-                        <td class="p-2">${item.date}</td>
-                        <td class="p-2">${item.client} / ${item.project}</td>
-                        <td class="p-2">${item.activity}</td>
-                        <td class="p-2">${item.plannedHours}h</td>
-                        <td class="p-2">${item.type}</td>
-                        <td class="p-2">
-                            <button onclick="editPlanItem(${item.rowIndex}, '${planId}')" class="text-blue-600 hover:text-blue-800 text-sm font-medium">✏️ Edit</button>
-                        </td>
-                    </tr>`;
-                });
-                
-                html += `</tbody></table></div></div>`;
-            }
-            listDiv.innerHTML = html;
-        }
-
-        window.togglePlanSelectAll = function(planId) {
-            const selectAll = document.querySelector(`.plan-select-all[data-plan-id="${planId}"]`);
-            document.querySelectorAll(`.plan-item-cb[data-plan-id="${planId}"]`).forEach(cb => cb.checked = selectAll.checked);
-        };
-
-        window.approveSelectedPlanItems = async function(planId) {
-            const checked = document.querySelectorAll(`.plan-item-cb[data-plan-id="${planId}"]:checked`);
-            if (checked.length === 0) { alert('Please select at least one item'); return; }
-            
-            const rowIndices = Array.from(checked).map(cb => parseInt(cb.value));
-            if (!confirm(`Approve ${rowIndices.length} selected item(s)?`)) return;
-            
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'approvePlan', planId, rowIndices }) });
-                alert('Selected items approved!');
-                loadPendingPlanApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        window.rejectSelectedPlanItems = async function(planId) {
-            const checked = document.querySelectorAll(`.plan-item-cb[data-plan-id="${planId}"]:checked`);
-            if (checked.length === 0) { alert('Please select at least one item'); return; }
-            
-            const rowIndices = Array.from(checked).map(cb => parseInt(cb.value));
-            if (!confirm(`Reject ${rowIndices.length} selected item(s)?`)) return;
-            
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'rejectPlan', planId, rowIndices }) });
-                alert('Selected items rejected!');
-                loadPendingPlanApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        window.approvePlan = async function(planId) {
-            if (!confirm('Approve ALL items in this plan?')) return;
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'approvePlan', planId }) });
-                alert('Plan approved!');
-                loadPendingPlanApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        window.rejectPlan = async function(planId) {
-            if (!confirm('Reject ALL items in this plan?')) return;
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'rejectPlan', planId }) });
-                alert('Plan rejected!');
-                loadPendingPlanApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        // Edit Plan Item Modal
-        let editingPlanRowIndex = null;
-        let editingPlanPlanId = null;
-
-        window.editPlanItem = function(rowIndex, planId) {
-            const url = GOOGLE_SCRIPT_URL + '?action=getPendingPlanApprovals&approver=' + encodeURIComponent(currentUser);
-            fetch(url).then(r => r.json()).then(result => {
-                if (result.status !== 'success') return;
-                const item = result.approvals.find(a => a.rowIndex === rowIndex);
-                if (!item) { alert('Item not found'); return; }
-                
-                editingPlanRowIndex = rowIndex;
-                editingPlanPlanId = planId;
-                
-                document.getElementById('planEditFields').innerHTML = `
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label class="text-xs text-gray-600 font-medium">Date</label>
-                            <input type="date" id="peDate" class="edit-modal-input" value="${formatDateForInput(item.date)}"></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Planned Hours</label>
-                            <input type="number" id="pePlanned" class="edit-modal-input" step="0.25" min="0" value="${item.plannedHours}"></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Client</label>
-                            <select id="peClient" class="edit-modal-input">${clientsList.map(c => `<option value="${c}" ${c===item.client?'selected':''}>${c}</option>`).join('')}</select></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Project</label>
-                            <input type="text" id="peProject" class="edit-modal-input" value="${item.project}"></div>
-                        <div class="col-span-2"><label class="text-xs text-gray-600 font-medium">Activity</label>
-                            <textarea id="peActivity" class="edit-modal-input" rows="3">${item.activity}</textarea></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Type</label>
-                            <select id="peType" class="edit-modal-input"><option value="Recurring" ${item.type==='Recurring'?'selected':''}>Recurring</option><option value="Adhoc" ${item.type==='Adhoc'?'selected':''}>Adhoc</option></select></div>
-                    </div>`;
-                document.getElementById('planEditModal').classList.remove('hidden');
-            });
-        };
-
-        window.closePlanEditModal = function() {
-            document.getElementById('planEditModal').classList.add('hidden');
-        };
-
-        window.saveAndApprovePlan = async function() {
-            try {
-                // Save edits
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'editPlanItem',
-                        rowIndex: editingPlanRowIndex,
-                        updates: {
-                            date: document.getElementById('peDate').value,
-                            client: document.getElementById('peClient').value,
-                            project: document.getElementById('peProject').value,
-                            activity: document.getElementById('peActivity').value,
-                            plannedHours: document.getElementById('pePlanned').value,
-                            type: document.getElementById('peType').value
-                        }
-                    })
-                });
-                
-                // Then approve this single item
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'approvePlan', planId: editingPlanPlanId, rowIndices: [editingPlanRowIndex] }) });
-                
-                closePlanEditModal();
-                alert('Item edited and approved!');
-                loadPendingPlanApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        document.getElementById('refreshPlanApprovalsBtn').addEventListener('click', loadPendingPlanApprovals);
-
-        // ===================== PENDING APPROVALS (Admin - Hours Submissions) =====================
-        async function loadPendingApprovals() {
-            try {
-                const result = await (await fetch(GOOGLE_SCRIPT_URL + '?action=getPendingApprovals&approver=' + encodeURIComponent(currentUser))).json();
-                if (result.status === 'success') displayApprovals(result.approvals);
-            } catch (error) { console.error('Error loading approvals:', error); }
-        }
-
-        function displayApprovals(approvals) {
-            const listDiv = document.getElementById('approvalsList');
-            
-            if (approvals.length === 0) {
-                listDiv.innerHTML = '<p class="text-sm text-gray-600 italic">No pending approvals</p>';
-                return;
-            }
-            
-            const grouped = {};
-            approvals.forEach(a => {
-                if (!grouped[a.submissionId]) grouped[a.submissionId] = [];
-                grouped[a.submissionId].push(a);
-            });
-            
-            let html = '';
-            for (let subId in grouped) {
-                const items = grouped[subId];
-                const firstItem = items[0];
-                
-                html += `<div class="bg-white p-4 mb-4 rounded-lg border border-orange-300 shadow-sm">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <p class="font-semibold text-gray-800">From: ${firstItem.submittedBy}</p>
-                            <p class="text-sm text-gray-600">Submitted: ${firstItem.submittedAt} | ${items.length} entries</p>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="approveSelectedItems('${subId}')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm">✓ Approve Selected</button>
-                            <button onclick="approveSubmission('${subId}')" class="bg-green-700 hover:bg-green-800 text-white px-3 py-2 rounded text-sm">✓ Approve All</button>
-                            <button onclick="rejectSelectedItems('${subId}')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-sm">✗ Reject Selected</button>
-                            <button onclick="rejectSubmission('${subId}')" class="bg-red-700 hover:bg-red-800 text-white px-3 py-2 rounded text-sm">✗ Reject All</button>
-                        </div>
-                    </div>
-                    <table class="w-full border-collapse text-sm">
-                        <thead><tr class="bg-gray-50">
-                            <th class="p-2"><input type="checkbox" class="sub-select-all" data-sub-id="${subId}" onchange="toggleSubSelectAll('${subId}')"></th>
-                            <th class="p-2 text-left">Date</th><th class="p-2 text-left">Client/Project</th>
-                            <th class="p-2 text-left">Activity</th><th class="p-2 text-left">Actual</th>
-                            <th class="p-2 text-left">Plan</th><th class="p-2 text-left">Clock</th>
-                            <th class="p-2 text-left">Eff</th><th class="p-2 text-left">Billed</th>
-                            <th class="p-2 text-left">Type</th><th class="p-2 text-left">Action</th>
-                        </tr></thead><tbody>`;
-                
-                items.forEach(item => {
-                    html += `<tr class="border-t">
-                        <td class="p-2"><input type="checkbox" class="sub-item-cb" data-sub-id="${subId}" data-row-index="${item.rowIndex}" value="${item.rowIndex}"></td>
-                        <td class="p-2">${item.date}</td>
-                        <td class="p-2">${item.client} / ${item.project}</td>
-                        <td class="p-2 max-w-[150px] truncate" title="${item.activity}">${item.activity}</td>
-                        <td class="p-2 max-w-[150px] truncate" title="${item.actualActivity || ''}">${item.actualActivity || '-'}</td>
-                        <td class="p-2">${item.plannedHours}h</td>
-                        <td class="p-2 font-semibold text-purple-600">${item.clockifyHours}h</td>
-                        <td class="p-2 font-semibold text-green-600">${item.effectiveHours}h</td>
-                        <td class="p-2 font-semibold text-orange-600">${item.billedHours}h</td>
-                        <td class="p-2">${item.type}</td>
-                        <td class="p-2"><button onclick="editPendingItem(${item.rowIndex}, '${subId}')" class="text-blue-600 hover:text-blue-800 text-sm font-medium">✏️</button></td>
-                    </tr>`;
-                });
-                
-                html += `</tbody></table></div>`;
-            }
-            listDiv.innerHTML = html;
-        }
-
-        window.toggleSubSelectAll = function(subId) {
-            const selectAll = document.querySelector(`.sub-select-all[data-sub-id="${subId}"]`);
-            document.querySelectorAll(`.sub-item-cb[data-sub-id="${subId}"]`).forEach(cb => cb.checked = selectAll.checked);
-        };
-
-        window.approveSelectedItems = async function(subId) {
-            const checked = document.querySelectorAll(`.sub-item-cb[data-sub-id="${subId}"]:checked`);
-            if (checked.length === 0) { alert('Select at least one item'); return; }
-            const rowIndices = Array.from(checked).map(cb => parseInt(cb.value));
-            if (!confirm(`Approve ${rowIndices.length} selected item(s)?`)) return;
-            
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'approveSubmission', submissionId: subId, rowIndices }) });
-                alert('Selected items approved!');
-                loadPendingApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        window.rejectSelectedItems = async function(subId) {
-            const checked = document.querySelectorAll(`.sub-item-cb[data-sub-id="${subId}"]:checked`);
-            if (checked.length === 0) { alert('Select at least one item'); return; }
-            const rowIndices = Array.from(checked).map(cb => parseInt(cb.value));
-            if (!confirm(`Reject ${rowIndices.length} selected item(s)?`)) return;
-            
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'rejectSubmission', submissionId: subId, rowIndices }) });
-                alert('Selected items rejected!');
-                loadPendingApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        window.approveSubmission = async function(submissionId) {
-            if (!confirm('Approve ALL items?')) return;
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'approveSubmission', submissionId }) });
-                alert('Submission approved!');
-                loadPendingApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        window.rejectSubmission = async function(submissionId) {
-            if (!confirm('Reject ALL items?')) return;
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'rejectSubmission', submissionId }) });
-                alert('Submission rejected!');
-                loadPendingApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        // Edit Pending Item Modal
-        let editingPendingRowIndex = null;
-        let editingPendingSubId = null;
-
-        window.editPendingItem = function(rowIndex, subId) {
-            const url = GOOGLE_SCRIPT_URL + '?action=getPendingApprovals&approver=' + encodeURIComponent(currentUser);
-            fetch(url).then(r => r.json()).then(result => {
-                if (result.status !== 'success') return;
-                const item = result.approvals.find(a => a.rowIndex === rowIndex);
-                if (!item) { alert('Item not found'); return; }
-                
-                editingPendingRowIndex = rowIndex;
-                editingPendingSubId = subId;
-                
-                document.getElementById('pendingEditFields').innerHTML = `
-                    <div class="grid grid-cols-2 gap-3">
-                        <div><label class="text-xs text-gray-600 font-medium">Date</label>
-                            <input type="date" id="seDate" class="edit-modal-input" value="${formatDateForInput(item.date)}"></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Client</label>
-                            <select id="seClient" class="edit-modal-input">${clientsList.map(c => `<option value="${c}" ${c===item.client?'selected':''}>${c}</option>`).join('')}</select></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Project</label>
-                            <input type="text" id="seProject" class="edit-modal-input" value="${item.project}"></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Type</label>
-                            <select id="seType" class="edit-modal-input"><option value="Recurring" ${item.type==='Recurring'?'selected':''}>Recurring</option><option value="Adhoc" ${item.type==='Adhoc'?'selected':''}>Adhoc</option></select></div>
-                        <div class="col-span-2"><label class="text-xs text-gray-600 font-medium">Activity</label>
-                            <textarea id="seActivity" class="edit-modal-input" rows="2">${item.activity}</textarea></div>
-                        <div class="col-span-2"><label class="text-xs text-gray-600 font-medium">Actual Activity</label>
-                            <textarea id="seActualActivity" class="edit-modal-input" rows="2">${item.actualActivity || ''}</textarea></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Planned Hours</label>
-                            <input type="number" id="sePlanned" class="edit-modal-input" step="0.25" min="0" value="${item.plannedHours}"></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Clockify Hours</label>
-                            <input type="number" id="seClockify" class="edit-modal-input" step="0.25" min="0" value="${item.clockifyHours}"></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Effective Hours</label>
-                            <input type="number" id="seEffective" class="edit-modal-input" step="0.25" min="0" value="${item.effectiveHours}"></div>
-                        <div><label class="text-xs text-gray-600 font-medium">Billed Hours</label>
-                            <input type="number" id="seBilled" class="edit-modal-input" step="0.25" min="0" value="${item.billedHours}"></div>
-                    </div>`;
-                document.getElementById('pendingEditModal').classList.remove('hidden');
-            });
-        };
-
-        window.closePendingEditModal = function() {
-            document.getElementById('pendingEditModal').classList.add('hidden');
-        };
-
-        window.savePendingEdit = async function() {
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'editPendingItem',
-                        rowIndex: editingPendingRowIndex,
-                        updates: {
-                            date: document.getElementById('seDate').value,
-                            client: document.getElementById('seClient').value,
-                            project: document.getElementById('seProject').value,
-                            activity: document.getElementById('seActivity').value,
-                            actualActivity: document.getElementById('seActualActivity').value,
-                            plannedHours: document.getElementById('sePlanned').value,
-                            clockifyHours: document.getElementById('seClockify').value,
-                            effectiveHours: document.getElementById('seEffective').value,
-                            billedHours: document.getElementById('seBilled').value,
-                            type: document.getElementById('seType').value
-                        }
-                    })
-                });
-                
-                closePendingEditModal();
-                alert('Item updated!');
-                loadPendingApprovals();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        document.getElementById('refreshApprovalsBtn').addEventListener('click', loadPendingApprovals);
-
-        // ===================== REJECTED SUBMISSIONS (Data User) =====================
-        async function loadRejectedSubmissions() {
-            try {
-                const result = await (await fetch(GOOGLE_SCRIPT_URL + '?action=getRejectedSubmissions&username=' + encodeURIComponent(currentUser))).json();
-                if (result.status === 'success') displayRejectedSubmissions(result.rejected);
-            } catch (error) { console.error('Error loading rejected:', error); }
-        }
-
-        function displayRejectedSubmissions(rejected) {
-            const listDiv = document.getElementById('rejectedList');
-            
-            if (rejected.length === 0) {
-                listDiv.innerHTML = '<p class="text-sm text-gray-600 italic">No rejected submissions</p>';
-                return;
-            }
-            
-            const grouped = {};
-            rejected.forEach(item => {
-                if (!grouped[item.submissionId]) grouped[item.submissionId] = [];
-                grouped[item.submissionId].push(item);
-            });
-            
-            let html = '';
-            for (let subId in grouped) {
-                const items = grouped[subId];
-                html += `<div class="bg-white p-4 mb-4 rounded-lg border border-red-300 shadow-sm">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <p class="font-semibold text-gray-800">Rejected by: ${items[0].approver}</p>
-                            <p class="text-sm text-gray-600">${items.length} entries</p>
-                        </div>
-                        <div>
-                            <button onclick="loadRejectedToForm('${subId}')" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mr-2">📝 Load & Edit</button>
-                            <button onclick="deleteRejectedSubmission('${subId}')" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">🗑️ Delete</button>
-                        </div>
-                    </div>
-                    <div class="text-sm">`;
-                items.forEach(item => {
-                    html += `<div class="border-t pt-2 mt-2">
-                        <p><strong>${item.date}</strong> - ${item.client} / ${item.project}</p>
-                        <p class="text-gray-600">${item.activity}</p>
-                        ${item.actualActivity ? `<p class="text-gray-500 italic">Actual: ${item.actualActivity}</p>` : ''}
-                        <p class="text-gray-600">Planned: ${item.plannedHours}h | Clockify: ${item.clockifyHours}h | Effective: ${item.effectiveHours}h | Billed: ${item.billedHours}h | ${item.type}</p>
-                    </div>`;
-                });
-                html += `</div></div>`;
-            }
-            listDiv.innerHTML = html;
-        }
-
-        window.loadRejectedToForm = async function(submissionId) {
-            try {
-                const result = await (await fetch(GOOGLE_SCRIPT_URL + '?action=getRejectedSubmissions&username=' + encodeURIComponent(currentUser))).json();
-                if (result.status !== 'success') return;
-                
-                const items = result.rejected.filter(item => item.submissionId === submissionId);
-                if (items.length === 0) return;
-                
-                const tbody = document.getElementById('dataTableBody');
-                tbody.innerHTML = '';
-                rowCounter = 0;
-                
-                items.forEach(item => {
-                    addNewRow({
-                        date: item.date, client: item.client, project: item.project,
-                        activity: item.activity, actualActivity: item.actualActivity || '',
-                        planned: item.plannedHours, clockify: item.clockifyHours,
-                        effective: item.effectiveHours, billed: item.billedHours,
-                        admin: item.approver, type: item.type, user: currentUser
-                    });
-                });
-                
-                await fetch(GOOGLE_SCRIPT_URL + '?action=deleteRejectedSubmission&submissionId=' + encodeURIComponent(submissionId));
-                loadRejectedSubmissions();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                updateTotals();
-                showStatus(`📝 Loaded ${items.length} rejected entries for editing!`, 'blue');
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        window.deleteRejectedSubmission = async function(submissionId) {
-            if (!confirm('Permanently delete this rejected submission?')) return;
-            try {
-                await fetch(GOOGLE_SCRIPT_URL + '?action=deleteRejectedSubmission&submissionId=' + encodeURIComponent(submissionId));
-                alert('Deleted!');
-                loadRejectedSubmissions();
-            } catch (error) { alert('Error: ' + error.message); }
-        };
-
-        document.getElementById('refreshRejectedBtn').addEventListener('click', loadRejectedSubmissions);
-
-        // ===================== CLIENT / PROJECT MASTER =====================
-        document.getElementById('refreshClientsBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('refreshClientsBtn');
-            btn.disabled = true; btn.textContent = 'Loading...';
-            await loadClients();
-            btn.disabled = false; btn.textContent = '🔄 Refresh';
-        });
-
-        document.getElementById('refreshProjectsBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('refreshProjectsBtn');
-            btn.disabled = true; btn.textContent = 'Loading...';
-            await loadProjects();
-            btn.disabled = false; btn.textContent = '🔄 Refresh';
-        });
-
-        document.getElementById('addClientBtn').addEventListener('click', async () => {
-            const newClientName = document.getElementById('newClientName').value.trim();
-            const statusDiv = document.getElementById('clientMasterStatus');
-            const addBtn = document.getElementById('addClientBtn');
-            
-            if (!newClientName) {
-                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-                statusDiv.textContent = '❌ Please enter a client name!';
-                statusDiv.classList.remove('hidden');
-                return;
-            }
-
-            addBtn.disabled = true; addBtn.textContent = 'Adding...';
-            
-            try {
-                const result = await (await fetch(GOOGLE_SCRIPT_URL + '?action=addClient&clientName=' + encodeURIComponent(newClientName))).json();
-                
-                if (result.status === 'success') {
-                    statusDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
-                    statusDiv.textContent = '✅ Client added!';
-                    statusDiv.classList.remove('hidden');
-                    clientsList = result.clients || [...clientsList, newClientName];
-                    updateClientList();
-                    updateProjectClientSelect();
-                    document.getElementById('newClientName').value = '';
-                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
-                } else {
-                    statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-                    statusDiv.textContent = '❌ ' + result.message;
-                    statusDiv.classList.remove('hidden');
-                }
-            } catch (error) {
-                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-                statusDiv.textContent = '❌ Error: ' + error.message;
-                statusDiv.classList.remove('hidden');
-            } finally { addBtn.disabled = false; addBtn.textContent = 'Add Client'; }
-        });
-
-        document.getElementById('addProjectBtn').addEventListener('click', async () => {
-            const clientName = document.getElementById('projectClientSelect').value;
-            const projectName = document.getElementById('newProjectName').value.trim();
-            const statusDiv = document.getElementById('projectMasterStatus');
-            const addBtn = document.getElementById('addProjectBtn');
-            
-            if (!clientName || !projectName) {
-                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-                statusDiv.textContent = '❌ Please select a client and enter a project name!';
-                statusDiv.classList.remove('hidden');
-                return;
-            }
-
-            addBtn.disabled = true; addBtn.textContent = 'Adding...';
-            
-            try {
-                const result = await (await fetch(GOOGLE_SCRIPT_URL + '?action=addProject&clientName=' + encodeURIComponent(clientName) + '&projectName=' + encodeURIComponent(projectName))).json();
-                
-                if (result.status === 'success') {
-                    statusDiv.className = 'mt-3 p-3 bg-green-100 border border-green-400 text-green-800 rounded-lg';
-                    statusDiv.textContent = '✅ Project added!';
-                    statusDiv.classList.remove('hidden');
-                    projectsMap = result.projects || projectsMap;
-                    updateProjectList();
-                    document.getElementById('newProjectName').value = '';
-                    document.getElementById('projectClientSelect').value = '';
-                    setTimeout(() => statusDiv.classList.add('hidden'), 3000);
-                } else {
-                    statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-                    statusDiv.textContent = '❌ ' + result.message;
-                    statusDiv.classList.remove('hidden');
-                }
-            } catch (error) {
-                statusDiv.className = 'mt-3 p-3 bg-red-100 border border-red-400 text-red-800 rounded-lg';
-                statusDiv.textContent = '❌ Error: ' + error.message;
-                statusDiv.classList.remove('hidden');
-            } finally { addBtn.disabled = false; addBtn.textContent = 'Add Project'; }
-        });
-    </script>
-</body>
-</html>
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'success',
+        message: 'All activities recorded successfully!'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: 'Invalid action'
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
