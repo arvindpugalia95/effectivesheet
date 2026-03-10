@@ -939,11 +939,20 @@
             try {
                 const result = await (await fetch(GOOGLE_SCRIPT_URL + '?action=getLockDate')).json();
                 if (result.status === 'success' && result.lockDate) {
-                    globalLockDate = result.lockDate;
+                    // Ensure lock date is in YYYY-MM-DD format
+                    let ld = result.lockDate;
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(ld)) {
+                        // Try parsing as date
+                        const parsed = new Date(ld);
+                        if (!isNaN(parsed.getTime())) {
+                            ld = parsed.getFullYear() + '-' + 
+                                 String(parsed.getMonth() + 1).padStart(2, '0') + '-' + 
+                                 String(parsed.getDate()).padStart(2, '0');
+                        }
+                    }
+                    globalLockDate = ld;
                     console.log('Lock date loaded:', globalLockDate);
-                    // Apply min date to all existing date inputs
                     applyLockDateToInputs();
-                    // Show lock date info
                     showLockDateBanner();
                 }
             } catch (error) { console.error('Error loading lock date:', error); }
