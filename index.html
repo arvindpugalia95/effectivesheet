@@ -519,6 +519,7 @@
                 const type = row.querySelector('.row-type').value;
                 const user = row.querySelector('.row-user').value;
                 const planRowIndex = row.dataset.planRowIndex || '';
+                const planId = row.dataset.planIdValue || '';
                 
                 if (mode === 'plan') {
                     if (!date || !client || !project || !activity || !planned || !admin || !type || !user) {
@@ -538,7 +539,7 @@
                             date, clientName: client, project, activity, actualActivity,
                             plannedHours: planned || '0',
                             clockifyHours: clockify, effectiveHours: effective, billedHours: billed,
-                            adminAssigned: admin, type, user, planRowIndex
+                            adminAssigned: admin, type, user, planRowIndex, planId
                         });
                     }
                 }
@@ -1162,6 +1163,7 @@
                         row.className = 'hover:bg-purple-50';
                         row.id = `row-${rowId}`;
                         row.dataset.planRowIndex = plan.rowIndex || '';
+                        row.dataset.planIdValue = plan.planId || '';
                         
                         row.innerHTML = `
                             <td class="border border-gray-300 p-2 text-center">
@@ -1404,6 +1406,7 @@
                 const type = row.querySelector('.row-type').value;
                 const user = row.querySelector('.row-user').value;
                 const planRowIndex = row.dataset.planRowIndex || '';
+                const planId = row.dataset.planIdValue || '';
                 
                 if (!date || !client || !project || !activity || !clockify || !effective || !billed || !type || !user) {
                     hasError = true;
@@ -1414,7 +1417,7 @@
                         date, clientName: client, project, activity, actualActivity,
                         plannedHours: planned || '0',
                         clockifyHours: clockify, effectiveHours: effective, billedHours: billed,
-                        adminAssigned: admin, type, user, planRowIndex
+                        adminAssigned: admin, type, user, planRowIndex, planId
                     });
                 }
             });
