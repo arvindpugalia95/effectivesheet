@@ -951,43 +951,32 @@
 
         function showLockDateBanner() {
             if (!globalLockDate) return;
-            // Calculate the minimum allowed date (day after lock date)
-            const lockD = new Date(globalLockDate);
-            lockD.setDate(lockD.getDate() + 1);
-            const minDate = lockD.toISOString().split('T')[0];
             
             const banner = document.createElement('div');
             banner.id = 'lockDateBanner';
             banner.className = 'mb-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-center';
-            banner.innerHTML = `<span class="text-red-800 font-medium">🔒 Lock Date Active: No entries allowed on or before <strong>${globalLockDate}</strong>. Earliest allowed date is <strong>${minDate}</strong>.</span>`;
+            banner.innerHTML = `<span class="text-red-800 font-medium">🔒 Lock Date Active: No entries allowed before <strong>${globalLockDate}</strong>. Earliest allowed date is <strong>${globalLockDate}</strong>.</span>`;
             
-            // Insert before the connection test section
             const testSection = document.getElementById('testConnectionBtn').closest('.mb-6');
             if (testSection) testSection.parentNode.insertBefore(banner, testSection);
         }
 
         function applyLockDateToInputs() {
             if (!globalLockDate) return;
-            // Set min attribute on all date inputs (day after lock date)
-            const lockD = new Date(globalLockDate);
-            lockD.setDate(lockD.getDate() + 1);
-            const minDate = lockD.toISOString().split('T')[0];
-            
+            // Lock date itself is allowed, only dates before it are blocked
             document.querySelectorAll('.row-date').forEach(input => {
-                input.min = minDate;
-                // If current value violates lock date, clear it
-                if (input.value && input.value <= globalLockDate) {
-                    input.value = minDate;
+                input.min = globalLockDate;
+                if (input.value && input.value < globalLockDate) {
+                    input.value = globalLockDate;
                 }
             });
         }
 
-        // Validate dates against lock date before submission
         function validateLockDate(activities) {
             if (!globalLockDate) return null;
             for (let a of activities) {
-                if (a.date && a.date <= globalLockDate) {
-                    return `Date ${a.date} is on or before the lock date (${globalLockDate}). Please use a date after ${globalLockDate}.`;
+                if (a.date && a.date < globalLockDate) {
+                    return `Date ${a.date} is before the lock date (${globalLockDate}). Please use ${globalLockDate} or later.`;
                 }
             }
             return null;
@@ -1104,13 +1093,10 @@
             
             // Apply lock date restriction to the new row's date input
             if (globalLockDate) {
-                const lockD = new Date(globalLockDate);
-                lockD.setDate(lockD.getDate() + 1);
-                const minDate = lockD.toISOString().split('T')[0];
                 const dateInput = row.querySelector('.row-date');
-                dateInput.min = minDate;
-                if (dateInput.value && dateInput.value <= globalLockDate) {
-                    dateInput.value = minDate;
+                dateInput.min = globalLockDate;
+                if (dateInput.value && dateInput.value < globalLockDate) {
+                    dateInput.value = globalLockDate;
                 }
             }
             
