@@ -1307,13 +1307,11 @@
                         action: 'submitPlan',
                         activities: activities,
                         submittedBy: currentUser,
-                        isAdmin: currentUserRole === 'admin'
+                        isAdmin: true
                     })
                 });
 
-                const msg = currentUserRole === 'admin' 
-                    ? `✅ Plan submitted and approved! ${activities.length} entries saved.`
-                    : `✅ Plan submitted for approval! ${activities.length} entries sent to admin.`;
+                const msg = `✅ Plan submitted and approved! ${activities.length} entries saved.`;
                 showStatus(msg, 'green');
                 
                 removeSubmittedRows();
