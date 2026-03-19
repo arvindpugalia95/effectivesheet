@@ -393,7 +393,13 @@
         let pendingActivities = [];
         let pendingSubmissionType = null;
         let approvedPlanRows = new Set();
-        let globalLockDate = ''; // Date from Lock sheet — no entries allowed on or before this date
+        
+        // ===== LOCK DATE + TIME VARIABLES =====
+        let globalLockDate = '';           // YYYY-MM-DD from Lock!A1
+        let globalLockTimeHour = -1;       // Hour (0-23) from Lock!A2, -1 = no time set
+        let globalLockTimeMinute = -1;     // Minute from Lock!A2
+        let globalLockTimeFormatted = '';   // Display string like "11:00 AM"
+        let serverTimeOffset = 0;          // Offset: server IST ms - local clock ms
 
         // ===================== SELECTION MANAGEMENT =====================
         function getSelectedRowIds() {
@@ -414,7 +420,6 @@
             bar.classList.remove('hidden');
             document.getElementById('selectedCount').textContent = count;
             
-            // Check what type of rows are selected (plan-only or hours-filled)
             let hasPlanOnly = false;
             let hasHoursFilled = false;
             
@@ -432,7 +437,6 @@
                 }
             });
             
-            // Show appropriate buttons based on selection and role
             const planBtn = document.getElementById('submitSelectedPlanBtn');
             const hoursBtn = document.getElementById('submitSelectedHoursBtn');
             const directBtn = document.getElementById('submitSelectedDirectBtn');
@@ -450,10 +454,6 @@
                 } else {
                     hoursBtn.classList.remove('hidden');
                 }
-            }
-            if (hasPlanOnly && hasHoursFilled) {
-                // Mixed selection — show nothing specific, user should separate them
-                // Or show a warning
             }
         }
 
@@ -480,17 +480,14 @@
             updateSelectionBar();
         });
 
-        // Submit Selected as Plan
         document.getElementById('submitSelectedPlanBtn').addEventListener('click', () => {
             submitSelectedRows('plan');
         });
 
-        // Submit Selected Hours (data user)
         document.getElementById('submitSelectedHoursBtn').addEventListener('click', () => {
             submitSelectedRows('approval');
         });
 
-        // Submit Selected Direct (admin)
         document.getElementById('submitSelectedDirectBtn').addEventListener('click', () => {
             submitSelectedRows('admin');
         });
@@ -550,7 +547,6 @@
                 return;
             }
             
-            // Validate lock date
             const lockErr = validateLockDate(activities);
             if (lockErr) { showStatus('🔒 ' + lockErr, 'red'); return; }
             
@@ -604,6 +600,18 @@
                 const el = row.querySelector('.' + cls);
                 if (el) el.title = '🔒 Locked - From approved plan';
             });
+        }
+
+        // Helper: get current server IST time (using offset calculated at load)
+        function getServerISTNow() {
+            return new Date(Date.now() + serverTimeOffset);
+        }
+
+        function getServerISTDateString() {
+            const now = getServerISTNow();
+            return now.getFullYear() + '-' + 
+                String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                String(now.getDate()).padStart(2, '0');
         }
 
         // ===================== TOTALS & SUBMISSION MODE =====================
@@ -729,7 +737,7 @@
             confirmBtn.textContent = 'Submitting...';
             
             try {
-                let action, postData;
+                let postData;
                 
                 if (pendingSubmissionType === 'approval') {
                     postData = { action: 'submitForApproval', activities: pendingActivities, submittedBy: currentUser };
@@ -746,7 +754,6 @@
                 document.getElementById('reviewModal').classList.add('hidden');
                 showStatus(`✅ Successfully submitted ${pendingActivities.length} ${pendingActivities.length === 1 ? 'entry' : 'entries'}!`, 'green');
                 
-                // Remove submitted rows from table
                 removeSubmittedRows();
                 
             } catch (error) {
@@ -761,7 +768,6 @@
         });
 
         function removeSubmittedRows() {
-            // If we submitted selected rows, only remove those. Otherwise clear all.
             const selectedIds = getSelectedRowIds();
             
             if (selectedIds.length > 0) {
@@ -935,15 +941,14 @@
             } catch (error) { console.error('Error loading admins:', error); }
         }
 
-        // Load Lock Date from Lock sheet
+        // ===== LOAD LOCK DATE + TIME (uses server IST — tamper-proof) =====
         async function loadLockDate() {
             try {
                 const result = await (await fetch(GOOGLE_SCRIPT_URL + '?action=getLockDate')).json();
                 if (result.status === 'success' && result.lockDate) {
-                    // Ensure lock date is in YYYY-MM-DD format
+                    // Store lock date
                     let ld = result.lockDate;
                     if (!/^\d{4}-\d{2}-\d{2}$/.test(ld)) {
-                        // Try parsing as date
                         const parsed = new Date(ld);
                         if (!isNaN(parsed.getTime())) {
                             ld = parsed.getFullYear() + '-' + 
@@ -952,41 +957,152 @@
                         }
                     }
                     globalLockDate = ld;
-                    console.log('Lock date loaded:', globalLockDate);
+                    
+                    // Store lock time from A2
+                    if (result.lockTimeHour !== undefined && result.lockTimeHour >= 0) {
+                        globalLockTimeHour = result.lockTimeHour;
+                        globalLockTimeMinute = result.lockTimeMinute || 0;
+                        globalLockTimeFormatted = result.lockTimeFormatted || '';
+                    }
+                    
+                    // Calculate offset between server IST and local system clock
+                    // This prevents users from bypassing the lock by changing their system time
+                    if (result.serverISTFormatted) {
+                        const serverTime = new Date(result.serverISTFormatted).getTime();
+                        const localTime = Date.now();
+                        serverTimeOffset = serverTime - localTime;
+                    }
+                    
+                    console.log('Lock date:', globalLockDate);
+                    console.log('Lock time:', globalLockTimeHour >= 0 ? (globalLockTimeHour + ':' + String(globalLockTimeMinute).padStart(2, '0') + ' IST') : 'not set');
+                    console.log('Server time offset (ms):', serverTimeOffset);
+                    
                     applyLockDateToInputs();
                     showLockDateBanner();
                 }
             } catch (error) { console.error('Error loading lock date:', error); }
         }
 
+        // ===== LOCK DATE BANNER (shows time if set) =====
         function showLockDateBanner() {
             if (!globalLockDate) return;
+            
+            // Remove existing banner if present
+            const existing = document.getElementById('lockDateBanner');
+            if (existing) existing.remove();
+            
+            let bannerText = '';
+            if (globalLockTimeHour >= 0) {
+                // Check if lock time has passed
+                const serverNow = getServerISTNow();
+                const serverDateStr = getServerISTDateString();
+                const serverHour = serverNow.getHours();
+                const serverMinute = serverNow.getMinutes();
+                
+                let lockTimePassed = false;
+                if (serverDateStr > globalLockDate) {
+                    lockTimePassed = true;
+                } else if (serverDateStr === globalLockDate) {
+                    if (serverHour > globalLockTimeHour || 
+                        (serverHour === globalLockTimeHour && serverMinute >= globalLockTimeMinute)) {
+                        lockTimePassed = true;
+                    }
+                }
+                
+                if (lockTimePassed) {
+                    bannerText = `🔒 Lock Active: <strong>${globalLockDate}</strong> is now locked (lock time <strong>${globalLockTimeFormatted} IST</strong> has passed). Earliest allowed date is the next day.`;
+                } else {
+                    bannerText = `🔒 Lock Active: Entries on <strong>${globalLockDate}</strong> allowed until <strong>${globalLockTimeFormatted} IST</strong>. No entries before <strong>${globalLockDate}</strong>.`;
+                }
+            } else {
+                bannerText = `🔒 Lock Date Active: No entries allowed before <strong>${globalLockDate}</strong>. Earliest allowed date is <strong>${globalLockDate}</strong>.`;
+            }
             
             const banner = document.createElement('div');
             banner.id = 'lockDateBanner';
             banner.className = 'mb-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-lg flex items-center';
-            banner.innerHTML = `<span class="text-red-800 font-medium">🔒 Lock Date Active: No entries allowed before <strong>${globalLockDate}</strong>. Earliest allowed date is <strong>${globalLockDate}</strong>.</span>`;
+            banner.innerHTML = `<span class="text-red-800 font-medium">${bannerText}</span>`;
             
             const testSection = document.getElementById('testConnectionBtn').closest('.mb-6');
             if (testSection) testSection.parentNode.insertBefore(banner, testSection);
         }
 
+        // ===== APPLY LOCK DATE TO DATE INPUTS (uses server time) =====
         function applyLockDateToInputs() {
             if (!globalLockDate) return;
-            // Lock date itself is allowed, only dates before it are blocked
+            
+            // Determine effective minimum date based on lock date + time
+            let effectiveMinDate = globalLockDate;
+            
+            if (globalLockTimeHour >= 0) {
+                const serverNow = getServerISTNow();
+                const serverDateStr = getServerISTDateString();
+                const serverHour = serverNow.getHours();
+                const serverMinute = serverNow.getMinutes();
+                
+                let lockTimePassed = false;
+                if (serverDateStr > globalLockDate) {
+                    lockTimePassed = true;
+                } else if (serverDateStr === globalLockDate) {
+                    if (serverHour > globalLockTimeHour || 
+                        (serverHour === globalLockTimeHour && serverMinute >= globalLockTimeMinute)) {
+                        lockTimePassed = true;
+                    }
+                }
+                
+                if (lockTimePassed) {
+                    // Lock time passed → lock date itself is blocked → min = next day
+                    const nextDay = new Date(globalLockDate + 'T00:00:00');
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    effectiveMinDate = nextDay.getFullYear() + '-' + 
+                        String(nextDay.getMonth() + 1).padStart(2, '0') + '-' + 
+                        String(nextDay.getDate()).padStart(2, '0');
+                }
+            }
+            
             document.querySelectorAll('.row-date').forEach(input => {
-                input.min = globalLockDate;
-                if (input.value && input.value < globalLockDate) {
-                    input.value = globalLockDate;
+                input.min = effectiveMinDate;
+                if (input.value && input.value < effectiveMinDate) {
+                    input.value = effectiveMinDate;
                 }
             });
         }
 
+        // ===== VALIDATE LOCK DATE + TIME (uses server time — tamper-proof) =====
         function validateLockDate(activities) {
             if (!globalLockDate) return null;
+            
+            // Use server-adjusted time so changing system clock doesn't help
+            const serverNow = getServerISTNow();
+            const serverDateStr = getServerISTDateString();
+            const serverHour = serverNow.getHours();
+            const serverMinute = serverNow.getMinutes();
+            
             for (let a of activities) {
-                if (a.date && a.date < globalLockDate) {
+                if (!a.date) continue;
+                
+                // Dates strictly before lock date → always blocked
+                if (a.date < globalLockDate) {
                     return `Date ${a.date} is before the lock date (${globalLockDate}). Please use ${globalLockDate} or later.`;
+                }
+                
+                // Date equals lock date → check if lock time has passed
+                if (a.date === globalLockDate && globalLockTimeHour >= 0) {
+                    let lockTimePassed = false;
+                    
+                    if (serverDateStr > globalLockDate) {
+                        lockTimePassed = true;
+                    } else if (serverDateStr === globalLockDate) {
+                        if (serverHour > globalLockTimeHour || 
+                            (serverHour === globalLockTimeHour && serverMinute >= globalLockTimeMinute)) {
+                            lockTimePassed = true;
+                        }
+                    }
+                    
+                    if (lockTimePassed) {
+                        const timeStr = globalLockTimeFormatted || (globalLockTimeHour + ':' + String(globalLockTimeMinute).padStart(2, '0'));
+                        return `Date ${a.date} is now locked. The lock time (${timeStr} IST) has passed. Please use a later date.`;
+                    }
                 }
             }
             return null;
@@ -1102,13 +1218,7 @@
             tbody.appendChild(row);
             
             // Apply lock date restriction to the new row's date input
-            if (globalLockDate) {
-                const dateInput = row.querySelector('.row-date');
-                dateInput.min = globalLockDate;
-                if (dateInput.value && dateInput.value < globalLockDate) {
-                    dateInput.value = globalLockDate;
-                }
-            }
+            applyLockDateToInputs();
             
             updateTotals();
             return { rowId, row };
@@ -1239,7 +1349,7 @@
 
             const savedData = [];
             rows.forEach((row) => {
-                if (row.dataset.isLocked === 'true') return; // skip locked rows
+                if (row.dataset.isLocked === 'true') return;
                 savedData.push({
                     date: row.querySelector('.row-date').value,
                     client: row.querySelector('.row-client').value,
@@ -1291,7 +1401,6 @@
 
         // ===================== SUBMIT PLAN =====================
         async function submitPlanActivities(activities) {
-            // Validate lock date
             const lockErr = validateLockDate(activities);
             if (lockErr) { showStatus('🔒 ' + lockErr, 'red'); return; }
             
@@ -1425,7 +1534,6 @@
                 return null;
             }
             
-            // Validate lock date
             const lockErr = validateLockDate(activities);
             if (lockErr) { showStatus('🔒 ' + lockErr, 'red'); return null; }
             
@@ -1448,7 +1556,6 @@
                 return;
             }
             
-            // Group by planId
             const grouped = {};
             approvals.forEach(a => {
                 if (!grouped[a.planId]) grouped[a.planId] = [];
@@ -1596,7 +1703,6 @@
 
         window.saveAndApprovePlan = async function() {
             try {
-                // Save edits
                 await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         action: 'editPlanItem',
@@ -1612,7 +1718,6 @@
                     })
                 });
                 
-                // Then approve this single item
                 await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'approvePlan', planId: editingPlanPlanId, rowIndices: [editingPlanRowIndex] }) });
                 
