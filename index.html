@@ -612,6 +612,82 @@ tr.drag-over { border-top: 2px solid var(--gs-blue) !important; }
 }
 #lockBanner.show { display: flex; }
 
+/* ===== TAB SHEET VIEWS ===== */
+.tab-view { display: none; width: 100%; height: 100%; flex-direction: column; overflow: hidden; }
+.tab-view.active { display: flex; }
+
+#tabView-tracker { display: flex; }
+#tabView-tracker.active { display: flex; }
+
+.tab-sheet-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; background: var(--gs-header-bg);
+  border-bottom: 1px solid var(--gs-border);
+  flex-shrink: 0; height: 38px;
+}
+.tab-sheet-title { font-size: 13px; font-weight: 500; color: var(--gs-text); margin-right: 4px; }
+
+.tab-sheet-scroll { flex: 1; overflow: auto; }
+
+.tab-sheet-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; table-layout: auto;
+}
+.tab-sheet-table th {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--gs-header-bg);
+  padding: 7px 10px; text-align: left;
+  border-right: 1px solid var(--gs-border);
+  border-bottom: 2px solid #ccc;
+  font-size: 11px; font-weight: 500;
+  color: var(--gs-text-light); white-space: nowrap;
+  user-select: none;
+}
+.tab-sheet-table td {
+  padding: 6px 10px;
+  border-right: 1px solid var(--gs-border);
+  border-bottom: 1px solid var(--gs-border);
+  vertical-align: middle; font-size: 12px;
+  color: var(--gs-text);
+}
+.tab-sheet-table tr:hover td { background: var(--gs-row-hover); }
+.tab-sheet-table tr.tab-row-selected td { background: #e8f0fe; }
+
+.tab-empty {
+  text-align: center; padding: 32px !important;
+  color: var(--gs-text-light); font-style: italic;
+}
+.tab-group-row td {
+  background: #f1f3f4 !important;
+  font-weight: 500; font-size: 12px;
+  color: var(--gs-text); padding: 5px 10px !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+}
+.tab-action-btn {
+  padding: 3px 8px; border-radius: 3px; border: 1px solid;
+  font-size: 11px; cursor: pointer; font-weight: 500;
+  font-family: var(--font-ui); transition: all 0.1s;
+  white-space: nowrap;
+}
+.tab-btn-approve { color: var(--gs-green); border-color: var(--gs-green); background: #fff; }
+.tab-btn-approve:hover { background: #e6f4ea; }
+.tab-btn-reject { color: var(--gs-red); border-color: var(--gs-red); background: #fff; }
+.tab-btn-reject:hover { background: #fce8e6; }
+.tab-btn-load { color: var(--gs-blue); border-color: var(--gs-blue); background: #fff; }
+.tab-btn-load:hover { background: #e8f0fe; }
+.tab-btn-delete { color: var(--gs-text-light); border-color: var(--gs-border); background: #fff; }
+.tab-btn-delete:hover { background: #f1f3f4; color: var(--gs-red); border-color: var(--gs-red); }
+
+/* Client list items */
+.client-list-item {
+  padding: 8px 12px; border-bottom: 1px solid var(--gs-border);
+  cursor: pointer; display: flex; align-items: center;
+  justify-content: space-between; font-size: 13px;
+  transition: background 0.1s;
+}
+.client-list-item:hover { background: var(--gs-row-hover); }
+.client-list-item.active { background: #e8f0fe; color: var(--gs-blue); font-weight: 500; }
+
 /* Freeze pane shadow */
 .row-num-col::after {
   content: '';
@@ -822,7 +898,6 @@ tr.gs-row:not(.row-selected):hover .cell-td { background: #f8faff; }
     <div id="userInfo">
       <span id="userRoleLabel" style="color:var(--gs-text-light)"></span>
       <div id="userAvatar" title="User options" onclick="toggleSidePanel('account')">?</div>
-      <button class="top-btn top-btn-outline" onclick="openSidePanel('panels')">⚙️ Panels</button>
       <button class="top-btn top-btn-outline" id="reportBtn" onclick="window.open('https://arvindpugalia95.github.io/SimpleReportScript/','_blank')" style="display:none">📈 Report</button>
       <button class="top-btn top-btn-outline" onclick="logout()" style="color:var(--gs-red);border-color:var(--gs-red)">Sign out</button>
     </div>
@@ -853,10 +928,10 @@ tr.gs-row:not(.row-selected):hover .cell-td { background: #f8faff; }
       <div class="dropdown-menu">
         <div class="dd-item" onclick="toggleWrapAll()">⇔ Toggle wrap all cells</div>
         <div class="dd-sep"></div>
-        <div class="dd-item" onclick="openSidePanel('approvals')">🔔 Pending Approvals</div>
-        <div class="dd-item" onclick="openSidePanel('plans')">📅 Plan Approvals</div>
-        <div class="dd-item" onclick="openSidePanel('rejected')">❌ Rejected</div>
-        <div class="dd-item" onclick="openSidePanel('clients')">📋 Client Master</div>
+        <div class="dd-item" onclick="switchTab('approvals')">🔔 Pending Approvals</div>
+        <div class="dd-item" onclick="switchTab('plans')">📅 Plan Approvals</div>
+        <div class="dd-item" onclick="switchTab('rejected')">❌ Rejected</div>
+        <div class="dd-item" onclick="switchTab('clients')">📋 Clients & Projects</div>
       </div>
     </div>
     <div class="menu-item" tabindex="0">Insert
@@ -974,26 +1049,133 @@ tr.gs-row:not(.row-selected):hover .cell-td { background: #f8faff; }
 
   <!-- Sheet Scroll Container -->
   <div id="sheetContainer">
-    <div id="sheetScroll" tabindex="0" style="outline:none">
-      <div id="gridWrap">
-        <table id="gridTable">
-          <colgroup id="colGroup"></colgroup>
+    <!-- TRACKER TAB -->
+    <div id="tabView-tracker" class="tab-view active">
+      <div id="sheetScroll" tabindex="0" style="outline:none">
+        <div id="gridWrap">
+          <table id="gridTable">
+            <colgroup id="colGroup"></colgroup>
+            <thead><tr id="colHeaderRow"></tr></thead>
+            <tbody id="gridBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAN APPROVALS TAB -->
+    <div id="tabView-plans" class="tab-view">
+      <div class="tab-sheet-toolbar">
+        <span class="tab-sheet-title">📅 Plan Approvals</span>
+        <button class="sel-btn sel-btn-blue" onclick="loadTabPlans()">🔄 Refresh</button>
+        <span id="plansTabStatus" style="font-size:12px;color:var(--gs-text-light);margin-left:8px"></span>
+      </div>
+      <div class="tab-sheet-scroll">
+        <table class="tab-sheet-table" id="plansTable">
           <thead>
-            <tr id="colHeaderRow"></tr>
+            <tr>
+              <th style="width:32px"></th>
+              <th>Submitted By</th><th>Date</th><th>Client</th><th>Project</th>
+              <th>Activity</th><th>Planned h</th><th>Type</th><th>Submitted At</th>
+              <th style="width:160px">Actions</th>
+            </tr>
           </thead>
-          <tbody id="gridBody"></tbody>
+          <tbody id="plansTableBody"><tr><td colspan="10" class="tab-empty">Click Refresh to load</td></tr></tbody>
         </table>
       </div>
     </div>
+
+    <!-- PENDING APPROVALS TAB -->
+    <div id="tabView-approvals" class="tab-view">
+      <div class="tab-sheet-toolbar">
+        <span class="tab-sheet-title">🔔 Pending Approvals</span>
+        <button class="sel-btn sel-btn-blue" onclick="loadTabApprovals()">🔄 Refresh</button>
+        <button class="sel-btn sel-btn-blue" id="approveAllBtn" onclick="approveAllVisible()" style="display:none">✓ Approve All</button>
+        <button class="sel-btn" style="color:var(--gs-red);border-color:var(--gs-red);background:#fff;padding:4px 12px;border-radius:3px;border:1px solid;font-size:12px;font-family:var(--font-ui);cursor:pointer;font-weight:500" id="rejectAllBtn" onclick="rejectAllVisible()" style="display:none">✗ Reject All</button>
+        <span id="approvalsTabStatus" style="font-size:12px;color:var(--gs-text-light);margin-left:8px"></span>
+      </div>
+      <div class="tab-sheet-scroll">
+        <table class="tab-sheet-table" id="approvalsTable">
+          <thead>
+            <tr>
+              <th style="width:32px"><input type="checkbox" id="approvalsSelectAll" onchange="toggleApprovalsAll(this.checked)"></th>
+              <th>Submitted By</th><th>Date</th><th>Client</th><th>Project</th>
+              <th>Activity</th><th>Actual Activity</th><th>Clockify h</th><th>Effective h</th><th>Billed h</th><th>Type</th>
+              <th style="width:140px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="approvalsTableBody"><tr><td colspan="12" class="tab-empty">Click Refresh to load</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- REJECTED TAB -->
+    <div id="tabView-rejected" class="tab-view">
+      <div class="tab-sheet-toolbar">
+        <span class="tab-sheet-title">❌ Rejected Submissions</span>
+        <button class="sel-btn sel-btn-blue" onclick="loadTabRejected()">🔄 Refresh</button>
+        <span id="rejectedTabStatus" style="font-size:12px;color:var(--gs-text-light);margin-left:8px"></span>
+      </div>
+      <div class="tab-sheet-scroll">
+        <table class="tab-sheet-table" id="rejectedTable">
+          <thead>
+            <tr>
+              <th style="width:32px"></th>
+              <th>Rejected By</th><th>Date</th><th>Client</th><th>Project</th>
+              <th>Activity</th><th>Clockify h</th><th>Effective h</th><th>Billed h</th><th>Type</th>
+              <th style="width:130px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rejectedTableBody"><tr><td colspan="11" class="tab-empty">Click Refresh to load</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CLIENTS & PROJECTS TAB -->
+    <div id="tabView-clients" class="tab-view">
+      <div class="tab-sheet-toolbar">
+        <span class="tab-sheet-title">📋 Clients & Projects</span>
+        <button class="sel-btn sel-btn-blue" onclick="loadTabClients()">🔄 Refresh</button>
+      </div>
+      <div style="display:flex;height:calc(100% - 40px);overflow:hidden">
+        <!-- Clients panel -->
+        <div style="width:300px;border-right:1px solid var(--gs-border);display:flex;flex-direction:column;flex-shrink:0">
+          <div style="padding:8px 12px;background:var(--gs-header-bg);border-bottom:1px solid var(--gs-border);font-size:12px;font-weight:500;color:var(--gs-text-light)">CLIENTS</div>
+          <div style="padding:8px 12px;border-bottom:1px solid var(--gs-border);display:flex;gap:6px">
+            <input type="text" id="newClientInput" class="gs-input" style="flex:1;height:30px;font-size:12px" placeholder="New client name...">
+            <button class="gs-btn gs-btn-primary" style="height:30px;padding:0 10px;font-size:12px" onclick="addClientTab()">Add</button>
+          </div>
+          <div id="clientsTabList" style="flex:1;overflow-y:auto">
+            <div class="tab-empty">Loading...</div>
+          </div>
+        </div>
+        <!-- Projects panel -->
+        <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+          <div style="padding:8px 12px;background:var(--gs-header-bg);border-bottom:1px solid var(--gs-border);font-size:12px;font-weight:500;color:var(--gs-text-light)">PROJECTS <span id="projectsForClient" style="color:var(--gs-blue)"></span></div>
+          <div style="padding:8px 12px;border-bottom:1px solid var(--gs-border);display:flex;gap:6px;align-items:center">
+            <select id="projectClientSelect" class="gs-input" style="width:160px;height:30px;font-size:12px"><option value="">Select client...</option></select>
+            <input type="text" id="newProjectInput" class="gs-input" style="flex:1;height:30px;font-size:12px" placeholder="New project name...">
+            <button class="gs-btn gs-btn-primary" style="height:30px;padding:0 10px;font-size:12px" onclick="addProjectTab()">Add</button>
+          </div>
+          <div class="tab-sheet-scroll" style="flex:1">
+            <table class="tab-sheet-table" id="projectsTable">
+              <thead><tr><th>Client</th><th>Project</th><th style="width:80px">Action</th></tr></thead>
+              <tbody id="projectsTableBody"><tr><td colspan="3" class="tab-empty">Select a client or refresh</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- Sheet Tabs -->
   <div id="sheetTabs">
-    <button id="addSheetBtn" title="Add sheet">+</button>
-    <div class="sheet-tab active" data-tab="tracker">Tracker</div>
-    <div class="sheet-tab" data-tab="plans" onclick="openSidePanel('plans')">Plan Approvals</div>
-    <div class="sheet-tab" data-tab="approvals" onclick="openSidePanel('approvals')">Pending Approvals</div>
-    <div class="sheet-tab" data-tab="rejected" onclick="openSidePanel('rejected')">Rejected</div>
+    <button id="addSheetBtn" title="Add sheet" onclick="addNewRow()">+</button>
+    <div class="sheet-tab active" data-tab="tracker" onclick="switchTab('tracker')">Tracker</div>
+    <div class="sheet-tab" data-tab="plans" onclick="switchTab('plans')">Plan Approvals</div>
+    <div class="sheet-tab" data-tab="approvals" onclick="switchTab('approvals')">Pending Approvals</div>
+    <div class="sheet-tab" data-tab="rejected" onclick="switchTab('rejected')">Rejected</div>
+    <div class="sheet-tab" data-tab="clients" onclick="switchTab('clients')">Clients & Projects</div>
   </div>
 
   <!-- Status Bar -->
@@ -2189,170 +2371,292 @@ async function confirmSubmit() {
 
 // ===== SIDE PANEL =====
 let sidePanelCurrentTab = null;
-function openSidePanel(tab) {
-  document.getElementById('sidePanel').classList.add('open');
-  loadSidePanelContent(tab || 'approvals');
-}
-function toggleSidePanel(tab) {
-  const panel = document.getElementById('sidePanel');
-  if (panel.classList.contains('open') && sidePanelCurrentTab === tab) closeSidePanel();
-  else openSidePanel(tab);
-}
-function closeSidePanel() { document.getElementById('sidePanel').classList.remove('open'); }
+// ===== TAB SWITCHING =====
+let currentTab = 'tracker';
 
-function loadSidePanelContent(tab) {
-  sidePanelCurrentTab = tab;
-  const isAdmin = currentUserRole === 'admin';
-  const tabs = [
-    { key:'approvals', label:'🔔 Approvals', show:isAdmin },
-    { key:'plans', label:'📅 Plans', show:isAdmin },
-    { key:'rejected', label:'❌ Rejected', show:!isAdmin },
-    { key:'clients', label:'📋 Clients', show:isAdmin },
-    { key:'projects', label:'🗂 Projects', show:isAdmin },
-    { key:'account', label:'👤 Account', show:true },
-    { key:'summary', label:'📊 Summary', show:true },
-  ].filter(t=>t.show);
-
-  const tabsEl = document.getElementById('sidePanelTabs');
-  tabsEl.innerHTML = tabs.map(t=>`<div class="sp-tab${t.key===tab?' active':''}" onclick="loadSidePanelContent('${t.key}')">${t.label}</div>`).join('');
-
-  document.getElementById('sidePanelTitle').textContent = tabs.find(t=>t.key===tab)?.label || '';
-
-  const body = document.getElementById('sidePanelBody');
-  body.innerHTML = '<div style="color:var(--gs-text-light);font-size:13px">Loading...</div>';
-
-  if (tab === 'approvals') { loadPendingApprovals(); renderApprovalsSidePanel(); }
-  else if (tab === 'plans') { loadPendingPlanApprovals(); renderPlansSidePanel(); }
-  else if (tab === 'rejected') renderRejectedSidePanel();
-  else if (tab === 'clients') renderClientsSidePanel();
-  else if (tab === 'projects') renderProjectsSidePanel();
-  else if (tab === 'account') renderAccountPanel();
-  else if (tab === 'summary') renderSummaryPanel();
+function switchTab(tab) {
+  currentTab = tab;
+  // Update tab highlight
+  document.querySelectorAll('.sheet-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  // Show correct view
+  document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+  const view = document.getElementById('tabView-' + tab);
+  if (view) view.classList.add('active');
+  // Auto-load data when switching to a tab
+  if (tab === 'plans') loadTabPlans();
+  else if (tab === 'approvals') loadTabApprovals();
+  else if (tab === 'rejected') loadTabRejected();
+  else if (tab === 'clients') loadTabClients();
 }
 
-function renderApprovalsSidePanel() {
-  document.getElementById('sidePanelBody').innerHTML = `
-    <button class="gs-btn gs-btn-secondary" style="margin-bottom:10px;width:100%;height:32px;font-size:12px" onclick="loadPendingApprovals().then(()=>renderApprovalsSidePanel())">🔄 Refresh</button>
-    <div id="spApprovals"><div style="color:var(--gs-text-light);font-size:13px">Loading approvals...</div></div>`;
-  loadPendingApprovals().then(() => {
-    const body = document.getElementById('sidePanelBody');
-    if (body) body.querySelector('#spApprovals').innerHTML = approvalsCache ? renderApprovalsHTML(approvalsCache) : '<p style="color:var(--gs-text-light);font-size:13px">No pending approvals</p>';
-  });
-}
-function renderPlansSidePanel() {
-  document.getElementById('sidePanelBody').innerHTML = `
-    <button class="gs-btn gs-btn-secondary" style="margin-bottom:10px;width:100%;height:32px;font-size:12px" onclick="loadPendingPlanApprovals().then(()=>renderPlansSidePanel())">🔄 Refresh</button>
-    <div id="spPlans"><div style="color:var(--gs-text-light);font-size:13px">Loading plans...</div></div>`;
-  loadPendingPlanApprovals().then(() => {
-    const body = document.getElementById('sidePanelBody');
-    if (body) body.querySelector('#spPlans').innerHTML = planApprovalsCache ? renderPlansHTML(planApprovalsCache) : '<p style="color:var(--gs-text-light);font-size:13px">No pending plans</p>';
-  });
-}
-function renderRejectedSidePanel() {
-  document.getElementById('sidePanelBody').innerHTML = `
-    <button class="gs-btn gs-btn-secondary" style="margin-bottom:10px;width:100%;height:32px;font-size:12px" onclick="renderRejectedSidePanel()">🔄 Refresh</button>
-    <div id="spRejected"><div style="color:var(--gs-text-light);font-size:13px">Loading...</div></div>`;
-  loadRejectedSubmissions().then(rejected => {
-    const div = document.getElementById('spRejected');
-    if (!div) return;
-    if (!rejected || rejected.length===0) { div.innerHTML = '<p style="color:var(--gs-text-light);font-size:13px">No rejected submissions</p>'; return; }
+// ===== PLAN APPROVALS TAB =====
+async function loadTabPlans() {
+  const tbody = document.getElementById('plansTableBody');
+  const status = document.getElementById('plansTabStatus');
+  tbody.innerHTML = `<tr><td colspan="10" class="tab-empty">Loading...</td></tr>`;
+  status.textContent = '';
+  try {
+    const r = await (await fetch(GOOGLE_SCRIPT_URL+'?action=getPendingPlanApprovals&approver='+encodeURIComponent(currentUser))).json();
+    if (r.status !== 'success' || !r.approvals?.length) {
+      tbody.innerHTML = `<tr><td colspan="10" class="tab-empty">No pending plan approvals</td></tr>`;
+      return;
+    }
+    planApprovalsCache = r.approvals;
+    status.textContent = `${r.approvals.length} item(s)`;
+    // Group by planId
     const grouped = {};
-    rejected.forEach(item => { if (!grouped[item.submissionId]) grouped[item.submissionId]=[]; grouped[item.submissionId].push(item); });
-    div.innerHTML = Object.entries(grouped).map(([subId,items])=>`
-      <div class="approval-card" style="margin-bottom:10px">
-        <div class="approval-card-header">
-          <span style="font-size:12px">Rejected by ${items[0].approver} · ${items.length} entries</span>
-          <div style="display:flex;gap:6px">
-            <button class="sel-btn sel-btn-blue" style="font-size:11px;padding:3px 8px" onclick="loadRejectedToForm('${subId}')">📝 Load</button>
-            <button class="sel-btn sel-btn-gray" style="font-size:11px;padding:3px 8px" onclick="deleteRejectedSub('${subId}')">🗑</button>
-          </div>
-        </div>
-        <div style="padding:8px;font-size:12px">${items.slice(0,2).map(item=>`<div style="border-bottom:1px solid #f0f0f0;padding:4px 0"><strong>${item.date}</strong> – ${item.client}/${item.project}</div>`).join('')}${items.length>2?`<div style="color:var(--gs-text-light)">+${items.length-2} more</div>`:''}</div>
-      </div>`).join('');
-  });
-}
-function renderClientsSidePanel() {
-  document.getElementById('sidePanelBody').innerHTML = `
-    <div style="margin-bottom:12px">
-      <div style="font-size:12px;font-weight:500;color:var(--gs-text-light);margin-bottom:6px">ADD CLIENT</div>
-      <div style="display:flex;gap:6px">
-        <input type="text" id="spNewClient" class="gs-input" style="flex:1;height:32px;font-size:13px" placeholder="Client name">
-        <button class="gs-btn gs-btn-primary" style="height:32px;padding:0 12px;font-size:12px" onclick="addClientSP()">Add</button>
-      </div>
-      <div id="spClientStatus" style="margin-top:6px"></div>
-    </div>
-    <div style="font-size:12px;font-weight:500;color:var(--gs-text-light);margin-bottom:6px">CLIENTS</div>
-    <div id="spClientList" style="display:flex;flex-wrap:wrap;gap:6px">${clientsList.map(c=>`<span class="pill">${c}</span>`).join('')}</div>`;
-}
-function renderProjectsSidePanel() {
-  document.getElementById('sidePanelBody').innerHTML = `
-    <div style="margin-bottom:12px">
-      <div style="font-size:12px;font-weight:500;color:var(--gs-text-light);margin-bottom:6px">ADD PROJECT</div>
-      <select id="spProjClient" class="gs-input" style="width:100%;height:32px;font-size:13px;margin-bottom:6px"><option value="">Select client...</option>${clientsList.map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
-      <div style="display:flex;gap:6px">
-        <input type="text" id="spNewProject" class="gs-input" style="flex:1;height:32px;font-size:13px" placeholder="Project name">
-        <button class="gs-btn gs-btn-primary" style="height:32px;padding:0 12px;font-size:12px" onclick="addProjectSP()">Add</button>
-      </div>
-      <div id="spProjectStatus" style="margin-top:6px"></div>
-    </div>
-    <div style="font-size:12px;font-weight:500;color:var(--gs-text-light);margin-bottom:6px">PROJECTS</div>
-    <div id="spProjectList">${Object.entries(projectsMap).map(([client,projs])=>`<div style="margin-bottom:8px"><div style="font-size:12px;font-weight:500;color:var(--gs-text)">${client}</div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${projs.map(p=>`<span class="pill" style="background:#e6f4ea;color:var(--gs-green)">${p}</span>`).join('')}</div></div>`).join('')}</div>`;
-}
-function renderAccountPanel() {
-  document.getElementById('sidePanelBody').innerHTML = `
-    <div class="summary-card" style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div style="width:48px;height:48px;border-radius:50%;background:var(--gs-blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-family:var(--font-ui);font-weight:500">${currentUser.charAt(0).toUpperCase()}</div>
-        <div><div style="font-weight:500;font-size:14px">${currentUser}</div><div style="font-size:12px;color:var(--gs-text-light)">${currentUserRole==='admin'?'Administrator':'Data User'}</div></div>
-      </div>
-    </div>
-    <button class="gs-btn gs-btn-danger" style="width:100%;height:36px;font-size:13px" onclick="logout()">Sign out</button>`;
-}
-function renderSummaryPanel() {
-  let pl=0,cl=0,ef=0,bi=0;
-  getAllRowIds().forEach(id=>{ pl+=parseFloat(getCellVal(id,'planned')||0); cl+=parseFloat(getCellVal(id,'clockify')||0); ef+=parseFloat(getCellVal(id,'effective')||0); bi+=parseFloat(getCellVal(id,'billed')||0); });
-  const pct = cl>0?((ef/cl)*100).toFixed(1):0;
-  document.getElementById('sidePanelBody').innerHTML = `
-    <div class="summary-card" style="margin-bottom:8px"><div class="label">Planned Hours</div><div class="value val-blue">${pl.toFixed(2)}</div></div>
-    <div class="summary-card" style="margin-bottom:8px"><div class="label">Clockify Hours</div><div class="value val-purple">${cl.toFixed(2)}</div></div>
-    <div class="summary-card" style="margin-bottom:8px"><div class="label">Effective Hours</div><div class="value val-green">${ef.toFixed(2)} <small style="font-size:14px;color:#888">(${pct}%)</small></div></div>
-    <div class="summary-card" style="margin-bottom:8px"><div class="label">Billed Hours</div><div class="value val-orange">${bi.toFixed(2)}</div></div>
-    <div style="font-size:12px;color:var(--gs-text-light);margin-top:8px">${getAllRowIds().length} rows total</div>`;
+    r.approvals.forEach(a => { if (!grouped[a.planId]) grouped[a.planId]=[]; grouped[a.planId].push(a); });
+    let html = '';
+    Object.entries(grouped).forEach(([planId, items]) => {
+      html += `<tr class="tab-group-row">
+        <td></td>
+        <td colspan="7"><strong>${items[0].submittedBy}</strong> · ${items.length} item(s) · ${items[0].submittedAt||''}</td>
+        <td></td>
+        <td>
+          <button class="tab-action-btn tab-btn-approve" onclick="approvePlan('${planId}')">✓ Approve All</button>
+          <button class="tab-action-btn tab-btn-reject" style="margin-left:4px" onclick="rejectPlan('${planId}')">✗ Reject All</button>
+        </td>
+      </tr>`;
+      items.forEach(item => {
+        html += `<tr>
+          <td style="text-align:center;color:var(--gs-text-light);font-size:11px">${item.rowIndex}</td>
+          <td>${item.submittedBy||''}</td>
+          <td>${item.date||''}</td>
+          <td>${item.client||''}</td>
+          <td>${item.project||''}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.activity||''}</td>
+          <td style="text-align:right">${item.plannedHours||''}h</td>
+          <td><span class="cell-badge ${item.type==='Recurring'?'badge-recurring':'badge-adhoc'}">${item.type||''}</span></td>
+          <td style="color:var(--gs-text-light);font-size:11px">${item.submittedAt||''}</td>
+          <td>
+            <button class="tab-action-btn tab-btn-approve" onclick="approvePlanSelected('${planId}',[${item.rowIndex}])">✓</button>
+            <button class="tab-action-btn tab-btn-reject" onclick="rejectPlanSelected('${planId}',[${item.rowIndex}])">✗</button>
+            <button class="tab-action-btn tab-btn-load" style="margin-left:2px" onclick="editPlanItem(${item.rowIndex},'${planId}')">✏️</button>
+          </td>
+        </tr>`;
+      });
+    });
+    tbody.innerHTML = html;
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="10" class="tab-empty" style="color:var(--gs-red)">Error loading: ${e.message}</td></tr>`;
+  }
 }
 
-async function addClientSP() {
-  const name = document.getElementById('spNewClient')?.value.trim();
+// ===== PENDING APPROVALS TAB =====
+async function loadTabApprovals() {
+  const tbody = document.getElementById('approvalsTableBody');
+  const status = document.getElementById('approvalsTabStatus');
+  tbody.innerHTML = `<tr><td colspan="12" class="tab-empty">Loading...</td></tr>`;
+  status.textContent = '';
+  try {
+    const r = await (await fetch(GOOGLE_SCRIPT_URL+'?action=getPendingApprovals&approver='+encodeURIComponent(currentUser))).json();
+    if (r.status !== 'success' || !r.approvals?.length) {
+      tbody.innerHTML = `<tr><td colspan="12" class="tab-empty">No pending approvals</td></tr>`;
+      document.getElementById('approveAllBtn').style.display = 'none';
+      document.getElementById('rejectAllBtn').style.display = 'none';
+      return;
+    }
+    approvalsCache = r.approvals;
+    status.textContent = `${r.approvals.length} item(s)`;
+    document.getElementById('approveAllBtn').style.display = '';
+    document.getElementById('rejectAllBtn').style.display = '';
+    const grouped = {};
+    r.approvals.forEach(a => { if (!grouped[a.submissionId]) grouped[a.submissionId]=[]; grouped[a.submissionId].push(a); });
+    let html = '';
+    Object.entries(grouped).forEach(([subId, items]) => {
+      html += `<tr class="tab-group-row">
+        <td><input type="checkbox" class="approval-group-cb" data-sub-id="${subId}"></td>
+        <td colspan="9"><strong>${items[0].submittedBy}</strong> · ${items.length} entries · <span style="color:var(--gs-text-light)">${items[0].submittedAt||''}</span></td>
+        <td></td>
+        <td>
+          <button class="tab-action-btn tab-btn-approve" onclick="approveSubmission('${subId}')">✓ All</button>
+          <button class="tab-action-btn tab-btn-reject" style="margin-left:4px" onclick="rejectSubmission('${subId}')">✗ All</button>
+        </td>
+      </tr>`;
+      items.forEach(item => {
+        html += `<tr>
+          <td style="text-align:center"><input type="checkbox" class="approval-item-cb" data-sub-id="${subId}" data-row-index="${item.rowIndex}"></td>
+          <td>${item.submittedBy||''}</td>
+          <td>${item.date||''}</td>
+          <td>${item.client||''}</td>
+          <td>${item.project||''}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.activity||''}</td>
+          <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.actualActivity||'-'}</td>
+          <td style="text-align:right">${item.clockifyHours||''}h</td>
+          <td style="text-align:right">${item.effectiveHours||''}h</td>
+          <td style="text-align:right">${item.billedHours||''}h</td>
+          <td><span class="cell-badge ${item.type==='Recurring'?'badge-recurring':'badge-adhoc'}">${item.type||''}</span></td>
+          <td>
+            <button class="tab-action-btn tab-btn-approve" onclick="approveSelected('${subId}',[${item.rowIndex}])">✓</button>
+            <button class="tab-action-btn tab-btn-reject" onclick="rejectSelected('${subId}',[${item.rowIndex}])">✗</button>
+            <button class="tab-action-btn tab-btn-load" style="margin-left:2px" onclick="editPendingItem(${item.rowIndex},'${subId}')">✏️</button>
+          </td>
+        </tr>`;
+      });
+    });
+    tbody.innerHTML = html;
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="12" class="tab-empty" style="color:var(--gs-red)">Error: ${e.message}</td></tr>`;
+  }
+}
+
+function toggleApprovalsAll(checked) {
+  document.querySelectorAll('.approval-item-cb').forEach(cb => cb.checked = checked);
+}
+
+async function approveAllVisible() {
+  const subIds = [...new Set([...document.querySelectorAll('.approval-group-cb')].map(cb=>cb.dataset.subId))];
+  if (!subIds.length || !confirm(`Approve all ${subIds.length} submission(s)?`)) return;
+  for (const subId of subIds) await fetch(GOOGLE_SCRIPT_URL, {method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approveSubmission',submissionId:subId})});
+  showToast('✅ All approved', 'green');
+  loadTabApprovals();
+}
+
+async function rejectAllVisible() {
+  const subIds = [...new Set([...document.querySelectorAll('.approval-group-cb')].map(cb=>cb.dataset.subId))];
+  if (!subIds.length || !confirm(`Reject all ${subIds.length} submission(s)?`)) return;
+  for (const subId of subIds) await fetch(GOOGLE_SCRIPT_URL, {method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'rejectSubmission',submissionId:subId})});
+  showToast('Rejected all', 'red');
+  loadTabApprovals();
+}
+
+// ===== REJECTED TAB =====
+async function loadTabRejected() {
+  const tbody = document.getElementById('rejectedTableBody');
+  const status = document.getElementById('rejectedTabStatus');
+  tbody.innerHTML = `<tr><td colspan="11" class="tab-empty">Loading...</td></tr>`;
+  try {
+    const r = await (await fetch(GOOGLE_SCRIPT_URL+'?action=getRejectedSubmissions&username='+encodeURIComponent(currentUser))).json();
+    if (r.status !== 'success' || !r.rejected?.length) {
+      tbody.innerHTML = `<tr><td colspan="11" class="tab-empty">No rejected submissions</td></tr>`;
+      return;
+    }
+    status.textContent = `${r.rejected.length} item(s)`;
+    const grouped = {};
+    r.rejected.forEach(item => { if (!grouped[item.submissionId]) grouped[item.submissionId]=[]; grouped[item.submissionId].push(item); });
+    let html = '';
+    Object.entries(grouped).forEach(([subId, items]) => {
+      html += `<tr class="tab-group-row">
+        <td></td>
+        <td colspan="8">Rejected by <strong>${items[0].approver||'?'}</strong> · ${items.length} entries</td>
+        <td></td>
+        <td>
+          <button class="tab-action-btn tab-btn-load" onclick="loadRejectedToForm('${subId}');switchTab('tracker')">📝 Load to Tracker</button>
+          <button class="tab-action-btn tab-btn-delete" style="margin-left:4px" onclick="deleteRejectedSub('${subId}').then(()=>loadTabRejected())">🗑</button>
+        </td>
+      </tr>`;
+      items.forEach(item => {
+        html += `<tr>
+          <td></td>
+          <td style="color:var(--gs-text-light)">${item.approver||''}</td>
+          <td>${item.date||''}</td>
+          <td>${item.client||''}</td>
+          <td>${item.project||''}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.activity||''}</td>
+          <td style="text-align:right">${item.clockifyHours||''}h</td>
+          <td style="text-align:right">${item.effectiveHours||''}h</td>
+          <td style="text-align:right">${item.billedHours||''}h</td>
+          <td><span class="cell-badge ${item.type==='Recurring'?'badge-recurring':'badge-adhoc'}">${item.type||''}</span></td>
+          <td></td>
+        </tr>`;
+      });
+    });
+    tbody.innerHTML = html;
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="11" class="tab-empty" style="color:var(--gs-red)">Error: ${e.message}</td></tr>`;
+  }
+}
+
+// ===== CLIENTS & PROJECTS TAB =====
+let selectedClientForProjects = null;
+
+async function loadTabClients() {
+  const listEl = document.getElementById('clientsTabList');
+  listEl.innerHTML = '<div class="tab-empty">Loading...</div>';
+  await loadClients();
+  await loadProjects();
+  renderClientList();
+  // Populate project client select
+  const sel = document.getElementById('projectClientSelect');
+  if (sel) sel.innerHTML = '<option value="">Select client...</option>' + clientsList.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+function renderClientList() {
+  const listEl = document.getElementById('clientsTabList');
+  if (!clientsList.length) { listEl.innerHTML = '<div class="tab-empty">No clients yet</div>'; return; }
+  listEl.innerHTML = clientsList.map(c => `
+    <div class="client-list-item ${c===selectedClientForProjects?'active':''}" onclick="selectClientForProjects('${c}')">
+      <span>${c}</span>
+      <span style="font-size:11px;color:var(--gs-text-light)">${(projectsMap[c]||[]).length} projects</span>
+    </div>`).join('');
+}
+
+function selectClientForProjects(client) {
+  selectedClientForProjects = client;
+  document.getElementById('projectsForClient').textContent = '— ' + client;
+  const sel = document.getElementById('projectClientSelect');
+  if (sel) sel.value = client;
+  renderClientList();
+  renderProjectsTable(client);
+}
+
+function renderProjectsTable(client) {
+  const tbody = document.getElementById('projectsTableBody');
+  const projs = projectsMap[client] || [];
+  if (!projs.length) {
+    tbody.innerHTML = `<tr><td colspan="3" class="tab-empty">No projects for ${client}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = projs.map(p => `<tr>
+    <td>${client}</td>
+    <td>${p}</td>
+    <td><button class="tab-action-btn tab-btn-delete" onclick="confirmDeleteProject('${client}','${p}')">🗑 Remove</button></td>
+  </tr>`).join('');
+}
+
+async function addClientTab() {
+  const input = document.getElementById('newClientInput');
+  const name = input?.value.trim();
   if (!name) return;
-  const status = document.getElementById('spClientStatus');
   try {
     const r = await (await fetch(GOOGLE_SCRIPT_URL+'?action=addClient&clientName='+encodeURIComponent(name))).json();
-    if (r.status==='success') {
+    if (r.status === 'success') {
       clientsList = r.clients || [...clientsList, name];
-      status.innerHTML = `<div class="alert alert-success" style="font-size:12px">✅ Added!</div>`;
-      document.getElementById('spNewClient').value = '';
-      document.getElementById('spClientList').innerHTML = clientsList.map(c=>`<span class="pill">${c}</span>`).join('');
-      setTimeout(()=>status.innerHTML='', 3000);
-    } else status.innerHTML = `<div class="alert alert-error" style="font-size:12px">❌ ${r.message}</div>`;
-  } catch(e) { status.innerHTML = `<div class="alert alert-error" style="font-size:12px">❌ ${e.message}</div>`; }
+      input.value = '';
+      const sel = document.getElementById('projectClientSelect');
+      if (sel) sel.innerHTML = '<option value="">Select client...</option>' + clientsList.map(c=>`<option value="${c}">${c}</option>`).join('');
+      renderClientList();
+      showToast('✅ Client added: ' + name, 'green');
+    } else showToast('❌ ' + r.message, 'red');
+  } catch(e) { showToast('❌ ' + e.message, 'red'); }
 }
 
-async function addProjectSP() {
-  const client = document.getElementById('spProjClient')?.value;
-  const name = document.getElementById('spNewProject')?.value.trim();
-  if (!client || !name) return;
-  const status = document.getElementById('spProjectStatus');
+async function addProjectTab() {
+  const clientSel = document.getElementById('projectClientSelect');
+  const input = document.getElementById('newProjectInput');
+  const client = clientSel?.value;
+  const name = input?.value.trim();
+  if (!client) { showToast('Select a client first', 'red'); return; }
+  if (!name) return;
   try {
     const r = await (await fetch(GOOGLE_SCRIPT_URL+'?action=addProject&clientName='+encodeURIComponent(client)+'&projectName='+encodeURIComponent(name))).json();
-    if (r.status==='success') {
+    if (r.status === 'success') {
       projectsMap = r.projects || projectsMap;
-      status.innerHTML = `<div class="alert alert-success" style="font-size:12px">✅ Added!</div>`;
-      document.getElementById('spNewProject').value = '';
-      setTimeout(()=>status.innerHTML='', 3000);
-    } else status.innerHTML = `<div class="alert alert-error" style="font-size:12px">❌ ${r.message}</div>`;
-  } catch(e) { status.innerHTML = `<div class="alert alert-error" style="font-size:12px">❌ ${e.message}</div>`; }
+      input.value = '';
+      renderClientList();
+      if (selectedClientForProjects === client) renderProjectsTable(client);
+      showToast('✅ Project added: ' + name, 'green');
+    } else showToast('❌ ' + r.message, 'red');
+  } catch(e) { showToast('❌ ' + e.message, 'red'); }
 }
 
-// ===== APPROVALS =====
+function confirmDeleteProject(client, project) {
+  if (!confirm(`Remove project "${project}" from "${client}"?`)) return;
+  // No backend delete yet — show info
+  showToast('Project removal not yet supported by backend', 'red');
+}
+
+// ===== APPROVALS (backend calls — reused by tab views) =====
 let approvalsCache = null, planApprovalsCache = null;
 
 async function loadPendingApprovals() {
@@ -2362,32 +2666,6 @@ async function loadPendingApprovals() {
   } catch(e) {}
 }
 
-function renderApprovalsHTML(approvals) {
-  if (!approvals || approvals.length===0) return '<p style="font-size:13px;color:var(--gs-text-light)">No pending approvals</p>';
-  const grouped = {};
-  approvals.forEach(a=>{ if(!grouped[a.submissionId]) grouped[a.submissionId]=[]; grouped[a.submissionId].push(a); });
-  return Object.entries(grouped).map(([subId,items])=>`
-    <div class="approval-card" style="margin-bottom:10px">
-      <div class="approval-card-header">
-        <div style="font-size:12px"><strong>${items[0].submittedBy}</strong> · ${items.length} entries<br><span style="color:var(--gs-text-light)">${items[0].submittedAt}</span></div>
-        <div class="approval-btns">
-          <button class="sel-btn sel-btn-blue" style="font-size:11px;padding:2px 7px" onclick="approveSubmission('${subId}')">✓ All</button>
-          <button class="sel-btn" style="font-size:11px;padding:2px 7px;color:var(--gs-red);border-color:var(--gs-red)" onclick="rejectSubmission('${subId}')">✗ All</button>
-        </div>
-      </div>
-      <div style="padding:8px;font-size:12px">
-        ${items.map(item=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0">
-          <div><strong>${item.date}</strong> – ${item.client}/${item.project}<br><span style="color:var(--gs-text-light)">${item.clockifyHours}h / ${item.effectiveHours}h / ${item.billedHours}h</span></div>
-          <div style="display:flex;gap:4px">
-            <button class="sel-btn sel-btn-blue" style="font-size:10px;padding:2px 6px" onclick="approveSelected('${subId}',[${item.rowIndex}])">✓</button>
-            <button class="sel-btn" style="font-size:10px;padding:2px 6px;color:var(--gs-red);border-color:var(--gs-red)" onclick="rejectSelected('${subId}',[${item.rowIndex}])">✗</button>
-            <button class="sel-btn sel-btn-gray" style="font-size:10px;padding:2px 6px" onclick="editPendingItem(${item.rowIndex},'${subId}')">✏️</button>
-          </div>
-        </div>`).join('')}
-      </div>
-    </div>`).join('');
-}
-
 async function loadPendingPlanApprovals() {
   try {
     const r = await (await fetch(GOOGLE_SCRIPT_URL+'?action=getPendingPlanApprovals&approver='+encodeURIComponent(currentUser))).json();
@@ -2395,31 +2673,10 @@ async function loadPendingPlanApprovals() {
   } catch(e) {}
 }
 
-function renderPlansHTML(approvals) {
-  if (!approvals || approvals.length===0) return '<p style="font-size:13px;color:var(--gs-text-light)">No pending plan approvals</p>';
-  const grouped = {};
-  approvals.forEach(a=>{ if(!grouped[a.planId]) grouped[a.planId]=[]; grouped[a.planId].push(a); });
-  return Object.entries(grouped).map(([planId,items])=>`
-    <div class="approval-card" style="margin-bottom:10px">
-      <div class="approval-card-header">
-        <div style="font-size:12px"><strong>${items[0].submittedBy}</strong> · ${items.length} activities<br><span style="color:var(--gs-text-light)">${items[0].submittedAt}</span></div>
-        <div class="approval-btns">
-          <button class="sel-btn sel-btn-blue" style="font-size:11px;padding:2px 7px" onclick="approvePlan('${planId}')">✓ All</button>
-          <button class="sel-btn" style="font-size:11px;padding:2px 7px;color:var(--gs-red);border-color:var(--gs-red)" onclick="rejectPlan('${planId}')">✗ All</button>
-        </div>
-      </div>
-      <div style="padding:8px;font-size:12px">
-        ${items.map(item=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f0f0f0">
-          <div><strong>${item.date}</strong> – ${item.client}/${item.project}<br><span style="color:var(--gs-text-light)">${item.plannedHours}h · ${item.type}</span></div>
-          <div style="display:flex;gap:4px">
-            <button class="sel-btn sel-btn-blue" style="font-size:10px;padding:2px 6px" onclick="approvePlanSelected('${planId}',[${item.rowIndex}])">✓</button>
-            <button class="sel-btn" style="font-size:10px;padding:2px 6px;color:var(--gs-red);border-color:var(--gs-red)" onclick="rejectPlanSelected('${planId}',[${item.rowIndex}])">✗</button>
-            <button class="sel-btn sel-btn-gray" style="font-size:10px;padding:2px 6px" onclick="editPlanItem(${item.rowIndex},'${planId}')">✏️</button>
-          </div>
-        </div>`).join('')}
-      </div>
-    </div>`).join('');
-}
+// Keep openSidePanel/closeSidePanel as no-ops so nothing breaks
+function openSidePanel(tab) { switchTab(tab); }
+function toggleSidePanel(tab) { switchTab(tab); }
+function closeSidePanel() { switchTab('tracker'); }
 
 async function approveSubmission(subId) {
   if (!confirm('Approve ALL items?')) return;
@@ -2540,7 +2797,8 @@ async function deleteRejectedSub(submissionId) {
   if (!confirm('Delete this rejected submission?')) return;
   try {
     await fetch(GOOGLE_SCRIPT_URL+'?action=deleteRejectedSubmission&submissionId='+encodeURIComponent(submissionId));
-    showToast('Deleted'); renderRejectedSidePanel();
+    showToast('Deleted');
+    loadTabRejected();
   } catch(e) { showToast('❌ '+e.message,'red'); }
 }
 
