@@ -675,6 +675,25 @@ textarea.form-control { height: auto; min-height: 60px; padding: 8px 10px; resiz
 .freeze-line {
   position: sticky; left: var(--freeze-col-w); z-index: 11;
 }
+
+/* ===== NAVIGATION MODE CURSOR ===== */
+#sheetScroll:focus { outline: none; }
+.gs-cell.nav-selected {
+  outline: 2px solid var(--gs-blue);
+  outline-offset: -2px;
+  z-index: 15;
+  background: rgba(26,115,232,0.04);
+}
+/* Typing cursor for edit mode */
+.gs-cell.editing-mode { caret-color: auto !important; }
+/* Scrolled-to highlight flash */
+@keyframes cellFlash { 0%,100%{background:transparent} 50%{background:rgba(26,115,232,0.12)} }
+.cell-flash { animation: cellFlash 0.3s ease; }
+/* Shortcut kbd */
+kbd {
+  display:inline-block;background:#f8f9fa;border:1px solid #dadce0;
+  border-radius:4px;padding:1px 6px;font-size:11px;font-family:monospace;
+}
 </style>
 </head>
 <body>
@@ -875,7 +894,7 @@ textarea.form-control { height: auto; min-height: 60px; padding: 8px 10px; resiz
 
   <!-- Sheet Scroll Container -->
   <div id="sheetContainer">
-    <div id="sheetScroll">
+    <div id="sheetScroll" tabindex="0" style="outline:none">
       <div id="gridWrap">
         <table id="gridTable">
           <colgroup id="colGroup"></colgroup>
@@ -1128,6 +1147,8 @@ async function showMainApp() {
   loadSavedProgress();
   await loadApprovedPlans();
   updateTotals();
+  // Auto-select first data cell
+  setTimeout(() => { const ids = getAllRowIds(); if (ids.length) selectCell(ids[0], 'date'); }, 200);
   if (isAdmin) { loadPendingApprovals(); loadPendingPlanApprovals(); }
   else loadRejectedSubmissions();
 }
@@ -1409,23 +1430,97 @@ function getEffectiveMinDate() {
   return globalLockDate;
 }
 
-// ===== SELECTION =====
-function selectCell(rowId, col) {
-  // Remove previous highlight
+// ===== CELL NAVIGATION ENGINE =====
+// Maps col key → index and back
+function getColIndex(key) { return COLS.findIndex(c=>c.key===key && c.type!=='drag'); }
+function getNavCols() { return COLS.filter(c=>c.type!=='drag'); }
+
+function selectCell(rowId, col, focusInput) {
   document.querySelectorAll('.gs-cell.selected').forEach(c=>c.classList.remove('selected'));
   const td = document.querySelector(`#row-${rowId} td[data-col="${col}"]`);
-  if (td) td.classList.add('selected');
+  if (td) { td.classList.add('selected'); td.scrollIntoView({ block:'nearest', inline:'nearest' }); }
   currentSelectedCell = { rowId, col };
-  document.getElementById('cellRef').value = col + rowId;
+
+  const navCols = getNavCols();
+  const cIdx = navCols.findIndex(c=>c.key===col);
+  const rowIds = getAllRowIds();
+  const rIdx = rowIds.indexOf(rowId);
+  // Col letter like A,B,C… (skip drag col)
+  const colLetter = String.fromCharCode(65 + cIdx);
+  document.getElementById('cellRef').value = colLetter + (rIdx + 1);
+
   const el = document.getElementById(`cell-${rowId}-${col}`);
-  if (el) document.getElementById('formulaInput').value = el.value;
+  if (el) {
+    document.getElementById('formulaInput').value = el.value || '';
+    if (focusInput) { el.focus(); if(el.select && el.type!=='date') el.select(); }
+  }
+  updateToolbarState(rowId, col);
+}
+
+function updateToolbarState(rowId, col) {
+  const s = cellStyles[rowId+'_'+col] || {};
+  document.getElementById('boldBtn').classList.toggle('active', !!s.bold);
+  document.getElementById('italicBtn').classList.toggle('active', !!s.italic);
+  document.getElementById('underlineBtn').classList.toggle('active', !!s.underline);
+  document.getElementById('strikeBtn').classList.toggle('active', !!s.strike);
+  document.getElementById('wrapBtn').classList.toggle('active', !!s.wrap);
+  ['alignLeftBtn','alignCenterBtn','alignRightBtn'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
+  if (s.align) document.getElementById('align'+s.align.charAt(0).toUpperCase()+s.align.slice(1)+'Btn')?.classList.add('active');
+}
+
+// Navigate to adjacent cell
+function navigateCell(dRow, dCol, wrap) {
+  if (!currentSelectedCell) return false;
+  const navCols = getNavCols();
+  const rowIds = getAllRowIds();
+  const rIdx = rowIds.indexOf(currentSelectedCell.rowId);
+  const cIdx = navCols.findIndex(c=>c.key===currentSelectedCell.col);
+  if (rIdx === -1 || cIdx === -1) return false;
+
+  let nrIdx = rIdx + dRow;
+  let ncIdx = cIdx + dCol;
+
+  if (wrap) {
+    // Tab wraps: end of row → start of next row; start of row → end of prev row
+    if (ncIdx >= navCols.length) { ncIdx = 0; nrIdx++; }
+    if (ncIdx < 0) { ncIdx = navCols.length - 1; nrIdx--; }
+  }
+
+  // Clamp rows — auto-add row if going past last
+  if (nrIdx >= rowIds.length) { addNewRow(); return navigateCell(dRow, dCol, wrap); }
+  if (nrIdx < 0) return false;
+  if (ncIdx < 0 || ncIdx >= navCols.length) return false;
+
+  selectCell(rowIds[nrIdx], navCols[ncIdx].key, true);
+  return true;
+}
+
+// Jump to first/last in row or column
+function navigateTo(target) {
+  if (!currentSelectedCell) return;
+  const navCols = getNavCols();
+  const rowIds = getAllRowIds();
+  const rIdx = rowIds.indexOf(currentSelectedCell.rowId);
+  const cIdx = navCols.findIndex(c=>c.key===currentSelectedCell.col);
+  if (rIdx===-1||cIdx===-1) return;
+
+  if (target==='home')    selectCell(rowIds[rIdx], navCols[0].key, true);
+  if (target==='end')     selectCell(rowIds[rIdx], navCols[navCols.length-1].key, true);
+  if (target==='top')     selectCell(rowIds[0], navCols[cIdx].key, true);
+  if (target==='bottom')  { const last = rowIds[rowIds.length-1]; selectCell(last, navCols[cIdx].key, true); }
+  if (target==='topleft') selectCell(rowIds[0], navCols[0].key, true);
 }
 
 function onFormulaInput(val) {
   if (!currentSelectedCell) return;
   const el = document.getElementById(`cell-${currentSelectedCell.rowId}-${currentSelectedCell.col}`);
-  if (el) { el.value = val; updateTotals(); }
+  if (el) { el.value = val; updateTotals(); onCellInput(currentSelectedCell.rowId, currentSelectedCell.col, val); }
 }
+document.getElementById('formulaInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.activeElement.blur(); navMode = true; navigateCell(1,0,false); }
+  if (e.key === 'Escape') { e.preventDefault(); document.activeElement.blur(); navMode = true; }
+  if (e.key === 'Tab') { e.preventDefault(); document.activeElement.blur(); navMode = true; navigateCell(0, e.shiftKey?-1:1, true); }
+});
 
 // Row checkbox
 function onRowCbChange(rowId) {
@@ -2278,16 +2373,217 @@ function showToast(msg, type) {
   setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity 0.3s'; setTimeout(()=>toast.remove(), 300); }, 3000);
 }
 
-// ===== KEYBOARD SHORTCUTS =====
+// ===== KEYBOARD NAVIGATION & SHORTCUTS =====
+// Track whether we're in "navigation mode" (arrow keys move between cells)
+// vs "editing mode" (typing inside a cell input)
+let navMode = true; // true = arrow keys navigate; false = inside input
+
 document.addEventListener('keydown', e => {
-  if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); saveProgress(); }
-  if ((e.ctrlKey||e.metaKey) && e.key==='f') { e.preventDefault(); showFindBar(); }
-  if ((e.ctrlKey||e.metaKey) && e.key==='b') { e.preventDefault(); toggleBold(); }
-  if ((e.ctrlKey||e.metaKey) && e.key==='i') { e.preventDefault(); toggleItalic(); }
-  if ((e.ctrlKey||e.metaKey) && e.key==='u') { e.preventDefault(); toggleUnderline(); }
-  if (e.key==='Escape') { hideFindBar(); closeModal('reviewModal'); closeModal('planEditModal'); closeModal('pendingEditModal'); closeSidePanel(); }
-  if ((e.ctrlKey||e.metaKey) && e.key==='Enter') { addNewRow(); }
+  const tag = document.activeElement?.tagName;
+  const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  const ctrl = e.ctrlKey || e.metaKey;
+  const modal = document.querySelector('.modal-overlay.show');
+
+  // ── Global shortcuts (always active, even in inputs) ──
+  if (ctrl && e.key === 's') { e.preventDefault(); saveProgress(); return; }
+  if (ctrl && e.key === 'f') { e.preventDefault(); showFindBar(); return; }
+  if (e.key === 'Escape') {
+    if (document.getElementById('findBar').classList.contains('show')) { hideFindBar(); return; }
+    if (modal) { modal.classList.remove('show'); return; }
+    if (document.getElementById('sidePanel').classList.contains('open')) { closeSidePanel(); return; }
+    // Esc from input → go back to nav mode
+    if (inInput && currentSelectedCell) { document.activeElement.blur(); navMode = true; return; }
+    return;
+  }
+  if (e.key === '?' && !inInput) { e.preventDefault(); toggleShortcutHelp(); return; }
+
+  // ── Formatting shortcuts (only when a cell is selected but not typing in a text input) ──
+  if (ctrl) {
+    if (e.key === 'b') { e.preventDefault(); toggleBold(); return; }
+    if (e.key === 'i') { e.preventDefault(); toggleItalic(); return; }
+    if (e.key === 'u') { e.preventDefault(); toggleUnderline(); return; }
+    if (e.key === 'z') { e.preventDefault(); undoAction(); return; }
+    if (e.key === 'y') { e.preventDefault(); redoAction(); return; }
+    if (e.key === 'd') { e.preventDefault(); if (currentSelectedCell) { ctxTargetRowId = currentSelectedCell.rowId; ctxDuplicate(); } return; }
+    if (e.key === 'Enter') { e.preventDefault(); addNewRow(); return; } // Ctrl+Enter = add row
+  }
+
+  // ── Navigation — only when NOT actively editing text ──
+  if (!inInput || navMode) {
+    // Arrow keys: navigate cells
+    if (e.key === 'ArrowDown')  { e.preventDefault(); navigateCell(1, 0, false); return; }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); navigateCell(-1, 0, false); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); navigateCell(0, 1, false); return; }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); navigateCell(0, -1, false); return; }
+
+    // Tab / Shift+Tab: move right/left, wrapping to next/prev row
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      navigateCell(0, e.shiftKey ? -1 : 1, true);
+      return;
+    }
+
+    // Enter: move down (like Sheets)
+    if (e.key === 'Enter' && !ctrl) {
+      e.preventDefault();
+      if (navMode) {
+        // Enter on a cell → focus its input (enter edit mode)
+        if (currentSelectedCell) {
+          const el = document.getElementById(`cell-${currentSelectedCell.rowId}-${currentSelectedCell.col}`);
+          if (el && el.tagName !== 'SELECT') { navMode = false; el.focus(); if(el.select && el.type!=='date') el.select(); }
+          else if (el) { el.focus(); navigateCell(1, 0, false); }
+        }
+      } else {
+        // Enter while editing → commit and move down
+        navMode = true;
+        navigateCell(1, 0, false);
+      }
+      return;
+    }
+
+    // Home / End: first / last cell in row
+    if (e.key === 'Home') { e.preventDefault(); navigateTo(ctrl ? 'topleft' : 'home'); return; }
+    if (e.key === 'End')  { e.preventDefault(); navigateTo(ctrl ? 'bottom' : 'end'); return; }
+
+    // Ctrl+Home / Ctrl+End
+    if (ctrl && e.key === 'Home') { e.preventDefault(); navigateTo('topleft'); return; }
+    if (ctrl && e.key === 'End')  { e.preventDefault(); navigateTo('bottom'); return; }
+
+    // Page Down / Page Up: scroll ~10 rows
+    if (e.key === 'PageDown') { e.preventDefault(); navigateCell(10, 0, false); return; }
+    if (e.key === 'PageUp')   { e.preventDefault(); navigateCell(-10, 0, false); return; }
+
+    // Delete / Backspace: clear selected cell value
+    if ((e.key === 'Delete' || e.key === 'Backspace') && navMode && currentSelectedCell) {
+      const el = document.getElementById(`cell-${currentSelectedCell.rowId}-${currentSelectedCell.col}`);
+      if (el && !el.disabled && el.tagName !== 'SELECT') { e.preventDefault(); el.value = ''; onCellInput(currentSelectedCell.rowId, currentSelectedCell.col, ''); updateTotals(); }
+      return;
+    }
+
+    // Space: select/deselect row checkbox
+    if (e.key === ' ' && navMode && currentSelectedCell && !inInput) {
+      e.preventDefault();
+      const rowId = currentSelectedCell.rowId;
+      const cb = document.querySelector(`.row-cb[data-row-id="${rowId}"]`);
+      if (cb) { cb.checked = !cb.checked; onRowCbChange(rowId); }
+      return;
+    }
+
+    // F2: enter edit mode for current cell
+    if (e.key === 'F2' && currentSelectedCell) {
+      e.preventDefault();
+      const el = document.getElementById(`cell-${currentSelectedCell.rowId}-${currentSelectedCell.col}`);
+      if (el) { navMode = false; el.focus(); if (el.select && el.type!=='date') el.select(); }
+      return;
+    }
+  }
+
+  // ── When user starts typing a printable char on a nav-mode cell → enter edit mode ──
+  if (navMode && currentSelectedCell && !inInput && !ctrl && e.key.length === 1) {
+    const el = document.getElementById(`cell-${currentSelectedCell.rowId}-${currentSelectedCell.col}`);
+    if (el && !el.disabled && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && el.type !== 'date') {
+      navMode = false;
+      el.value = ''; // clear and start typing
+      el.focus();
+    }
+  }
 });
+
+// When user clicks directly into an input → switch to edit mode
+document.addEventListener('focusin', e => {
+  const tag = e.target.tagName;
+  if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') && e.target.closest('#gridBody')) {
+    navMode = false;
+  }
+});
+document.addEventListener('focusout', e => {
+  const tag = e.target.tagName;
+  if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') && e.target.closest('#gridBody')) {
+    // Small delay so Tab/Enter can set navMode properly
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (!active || !active.closest('#gridBody')) navMode = true;
+    }, 50);
+  }
+});
+
+// ===== SHORTCUT HELP OVERLAY =====
+const SHORTCUTS = [
+  { cat:'Navigation', rows:[
+    ['Arrow keys', 'Move between cells'],
+    ['Tab / Shift+Tab', 'Move right / left (wrap rows)'],
+    ['Enter', 'Edit cell / confirm & move down'],
+    ['F2', 'Enter edit mode for selected cell'],
+    ['Shift+Esc / Esc', 'Exit edit mode / close dialog'],
+    ['Home / End', 'First / last cell in row'],
+    ['Ctrl+Home', 'Go to top-left cell'],
+    ['Ctrl+End', 'Go to last row'],
+    ['Page Down / Page Up', 'Jump 10 rows down / up'],
+  ]},
+  { cat:'Editing', rows:[
+    ['Delete / Backspace', 'Clear selected cell'],
+    ['Ctrl+Enter', 'Add a new row at bottom'],
+    ['Ctrl+D', 'Duplicate current row'],
+    ['Space', 'Toggle row checkbox'],
+    ['Type any char', 'Replace cell value (in nav mode)'],
+  ]},
+  { cat:'Formatting', rows:[
+    ['Ctrl+B', 'Bold'],
+    ['Ctrl+I', 'Italic'],
+    ['Ctrl+U', 'Underline'],
+  ]},
+  { cat:'App', rows:[
+    ['Ctrl+S', 'Save progress'],
+    ['Ctrl+F', 'Find in sheet'],
+    ['Ctrl+Z', 'Undo'],
+    ['Ctrl+Y', 'Redo'],
+    ['?', 'Toggle shortcut help'],
+    ['Esc', 'Close dialogs / panels'],
+  ]},
+];
+
+function toggleShortcutHelp() {
+  let overlay = document.getElementById('shortcutHelp');
+  if (overlay) { overlay.remove(); return; }
+  overlay = document.createElement('div');
+  overlay.id = 'shortcutHelp';
+  overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;display:flex;align-items:center;justify-content:center;padding:16px`;
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+
+  const box = document.createElement('div');
+  box.style.cssText = `background:#fff;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.2);width:720px;max-width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column`;
+
+  const header = `<div style="padding:14px 20px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-family:var(--font-ui);font-size:16px;font-weight:500">⌨️ Keyboard Shortcuts</div>
+    <button onclick="document.getElementById('shortcutHelp').remove()" style="border:none;background:transparent;font-size:20px;cursor:pointer;color:#999;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='#f1f3f4'" onmouseout="this.style.background='transparent'">✕</button>
+  </div>`;
+
+  const grid = SHORTCUTS.map(cat=>`
+    <div>
+      <div style="font-size:11px;font-weight:600;color:#5f6368;letter-spacing:0.5px;margin-bottom:6px;text-transform:uppercase">${cat.cat}</div>
+      ${cat.rows.map(([k,d])=>`<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid #f0f0f0;gap:12px">
+        <kbd style="display:inline-block;background:#f8f9fa;border:1px solid #dadce0;border-radius:4px;padding:2px 7px;font-size:12px;font-family:monospace;white-space:nowrap;flex-shrink:0;min-width:140px">${k}</kbd>
+        <span style="font-size:13px;color:#202124">${d}</span>
+      </div>`).join('')}
+    </div>`).join('');
+
+  box.innerHTML = header + `<div style="padding:16px 20px;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr;gap:16px 24px">${grid}</div>
+    <div style="padding:10px 20px;border-top:1px solid #e0e0e0;font-size:12px;color:#5f6368;text-align:center">Press <kbd style="background:#f8f9fa;border:1px solid #dadce0;border-radius:3px;padding:1px 5px;font-size:11px">?</kbd> anytime to toggle this panel</div>`;
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+// Add "?" hint button to toolbar
+(function addHelpBtn() {
+  const tb = document.getElementById('toolbar');
+  const sep = document.createElement('div'); sep.className='tb-sep';
+  const btn = document.createElement('button');
+  btn.className='tb-btn'; btn.title='Keyboard shortcuts (?)'; btn.textContent='?';
+  btn.style.cssText='font-weight:700;font-size:13px;color:var(--gs-text-light);border:1px solid var(--gs-border);border-radius:50%;width:22px;height:22px';
+  btn.onclick = toggleShortcutHelp;
+  tb.appendChild(sep); tb.appendChild(btn);
+})();
 
 // ===== DATE HELPER =====
 function formatDateForInput(dateString) {
