@@ -2625,8 +2625,17 @@ document.addEventListener('keydown', e => {
     if (e.key === 'PageUp')   { e.preventDefault(); navigateCell(-10, 0, false); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       const el = document.getElementById('cell-' + currentSelectedCell.rowId + '-' + currentSelectedCell.col);
-      if (el && !el.disabled && !el.readOnly && el.tagName !== 'SELECT') {
-        e.preventDefault(); el.value = ''; refreshDisplay(currentSelectedCell.rowId, currentSelectedCell.col); updateTotals();
+      if (el && !el.disabled && !el.readOnly) {
+        e.preventDefault();
+        if (el.tagName === 'SELECT') {
+          el.value = '';
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          refreshDisplay(currentSelectedCell.rowId, currentSelectedCell.col);
+        } else {
+          el.value = '';
+          refreshDisplay(currentSelectedCell.rowId, currentSelectedCell.col);
+          updateTotals();
+        }
       }
       return;
     }
@@ -2639,10 +2648,21 @@ document.addEventListener('keydown', e => {
     }
     if (!ctrl && e.key.length === 1) {
       const el = document.getElementById('cell-' + currentSelectedCell.rowId + '-' + currentSelectedCell.col);
-      if (el && !el.disabled && !el.readOnly && el.tagName !== 'SELECT' && el.type !== 'date') {
+      if (el && !el.disabled && !el.readOnly) {
         enterEditMode(currentSelectedCell.rowId, currentSelectedCell.col);
-        el.value = e.key;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+        if (el.tagName === 'SELECT') {
+          // For selects: just open the dropdown by focusing — user picks with keyboard/mouse
+          el.focus();
+          el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        } else if (el.type !== 'date') {
+          // For text/number/textarea: replace value with typed char
+          el.value = e.key;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          refreshDisplay(currentSelectedCell.rowId, currentSelectedCell.col);
+        } else {
+          // For date inputs: just enter edit mode, don't replace value
+          el.focus();
+        }
       }
       return;
     }
