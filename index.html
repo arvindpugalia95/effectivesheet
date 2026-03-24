@@ -1428,6 +1428,16 @@ function addPlanRow(plan) {
   </td>`;
 
   const lockedCols = ['date','client','project','activity','planned','admin','type','user'];
+  // Store all plan values as data attributes for reliable reading (selects may not hydrate properly when disabled)
+  row.dataset.planDate = formatDateForInput(plan.date);
+  row.dataset.planClient = plan.client || '';
+  row.dataset.planProject = plan.project || '';
+  row.dataset.planActivity = plan.activity || '';
+  row.dataset.planPlanned = plan.plannedHours || '';
+  row.dataset.planAdmin = plan.admin || '';
+  row.dataset.planType = plan.type || 'Recurring';
+  row.dataset.planUser = currentUser;
+
   COLS.forEach(col => {
     if (col.type === 'drag') { html += `<td style="width:28px"></td>`; return; }
     const isLocked = lockedCols.includes(col.key);
@@ -1450,7 +1460,15 @@ function addPlanRow(plan) {
 
 function getCellVal(rowId, key) {
   const el = document.getElementById(`cell-${rowId}-${key}`);
-  return el ? el.value : '';
+  if (!el) return '';
+  // For disabled/readonly elements, el.value may be empty for selects with no matching option
+  // Fall back to the stored data attribute on the row if available
+  if ((el.disabled || el.readOnly) && el.value === '') {
+    const row = document.getElementById('row-' + rowId);
+    const dataKey = 'plan' + key.charAt(0).toUpperCase() + key.slice(1);
+    if (row && row.dataset[dataKey] !== undefined) return row.dataset[dataKey];
+  }
+  return el.value;
 }
 
 function getRowData(rowId) {
@@ -2014,44 +2032,50 @@ async function loadApprovedPlans() {
 }
 
 // ===== COLLECT ROW DATA =====
+// A row is "blank" if it has no client AND no clockify/effective/billed filled — i.e. a placeholder row
+function isRowBlank(d) {
+  return !d.client && !d.clockify && !d.effective && !d.billed && !d.activity;
+}
+
 function collectRows(rowIds, mode) {
   const activities = [];
   let hasError = false;
+
   rowIds.forEach(rowId => {
     const d = getRowData(rowId);
     if (!d) return;
+
+    // Always skip completely blank placeholder rows silently
+    if (isRowBlank(d)) {
+      document.getElementById('row-'+rowId)?.style.removeProperty('outline');
+      return;
+    }
+
     if (mode === 'plan') {
       if (!d.date||!d.client||!d.project||!d.activity||!d.planned||!d.admin||!d.type||!d.user) {
         hasError = true;
         document.getElementById('row-'+rowId)?.style.setProperty('outline','2px solid #d93025','important');
+        const missing = ['date','client','project','activity','planned','admin','type','user'].filter(k=>!d[k]);
+        console.warn('Row', rowId, 'missing plan fields:', missing.join(', '));
       } else {
         document.getElementById('row-'+rowId)?.style.removeProperty('outline');
         activities.push({ date:d.date, clientName:d.client, project:d.project, activity:d.activity, plannedHours:d.planned, adminAssigned:d.admin, type:d.type, user:d.user });
       }
     } else {
-      // For hour submissions: date, client, project, activity, clockify, effective, billed, type, user required
-      // admin is optional (plan rows carry admin from plan data)
+      // Hour submission — admin is optional (plan rows carry it)
       const missing = !d.date||!d.client||!d.project||!d.activity||!d.clockify||!d.effective||!d.billed||!d.type||!d.user;
       if (missing) {
         hasError = true;
         document.getElementById('row-'+rowId)?.style.setProperty('outline','2px solid #d93025','important');
-        // Show a specific message about what's missing
-        const missingFields = [];
-        if (!d.date) missingFields.push('Date');
-        if (!d.client) missingFields.push('Client');
-        if (!d.project) missingFields.push('Project');
-        if (!d.activity) missingFields.push('Activity');
-        if (!d.clockify) missingFields.push('Clockify h');
-        if (!d.effective) missingFields.push('Effective h');
-        if (!d.billed) missingFields.push('Billed h');
-        if (!d.type) missingFields.push('Type');
-        console.warn('Row', rowId, 'missing:', missingFields.join(', '), '| data:', d);
+        const missingFields = ['date','client','project','activity','clockify','effective','billed','type','user'].filter(k=>!d[k]);
+        console.warn('Row', rowId, 'missing hour fields:', missingFields.join(', '), '| data:', d);
       } else {
         document.getElementById('row-'+rowId)?.style.removeProperty('outline');
         activities.push({ date:d.date, clientName:d.client, project:d.project, activity:d.activity, actualActivity:d.actualActivity||'', plannedHours:d.planned||'0', clockifyHours:d.clockify, effectiveHours:d.effective, billedHours:d.billed, adminAssigned:d.admin||'', type:d.type, user:d.user, planRowIndex:d.planRowIndex, planId:d.planId });
       }
     }
   });
+
   return hasError ? null : activities;
 }
 
@@ -2060,18 +2084,12 @@ function submitAll(mode) {
   const ids = getAllRowIds().filter(id => {
     const d = getRowData(id);
     if (!d) return false;
-    if (mode === 'plan') return !d.isLocked; // plan rows already submitted; skip them
-    // For hour submission: include ALL rows (locked plan rows with hours filled + regular rows)
-    // But skip rows that are completely empty (no date, no client, no clockify)
-    const isEmpty = !d.date && !d.client && !d.clockify && !d.effective && !d.billed;
-    return !isEmpty;
+    if (mode === 'plan') return !d.isLocked;
+    return !isRowBlank(d); // skip blank placeholder rows
   });
   if (ids.length === 0) { showToast('No rows to submit', 'red'); return; }
   const activities = collectRows(ids, mode);
-  if (!activities) {
-    showToast('❌ Fill required fields (highlighted rows)', 'red');
-    return;
-  }
+  if (!activities) { showToast('❌ Fill required fields (highlighted rows)', 'red'); return; }
   if (activities.length === 0) { showToast('No valid rows to submit', 'red'); return; }
   const lockErr = validateLockDate(activities);
   if (lockErr) { showToast('🔒 '+lockErr, 'red'); return; }
@@ -2083,9 +2101,14 @@ function submitAllPlan() { submitAll('plan'); }
 
 function submitSelected(mode) {
   if (selectedRowIds.size === 0) { showToast('No rows selected', 'red'); return; }
-  const ids = Array.from(selectedRowIds);
+  // Pre-filter blank rows from selection
+  const ids = Array.from(selectedRowIds).filter(id => {
+    const d = getRowData(id);
+    return d && !isRowBlank(d);
+  });
+  if (ids.length === 0) { showToast('No filled rows selected', 'red'); return; }
   const activities = collectRows(ids, mode);
-  if (!activities) { showToast('❌ Fill required fields (check highlighted rows)', 'red'); return; }
+  if (!activities) { showToast('❌ Fill required fields (highlighted rows)', 'red'); return; }
   if (activities.length === 0) { showToast('No valid rows', 'red'); return; }
   const lockErr = validateLockDate(activities);
   if (lockErr) { showToast('🔒 '+lockErr, 'red'); return; }
